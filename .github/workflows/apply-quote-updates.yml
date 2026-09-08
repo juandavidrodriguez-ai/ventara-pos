@@ -16,21 +16,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Update quotation module
-        run: |
-          python tools/patch_quotes.py
-          python tools/fix_quote_js.py
+      - name: Replace quotation module
+        run: python tools/replace_quote_module.py
 
       - name: Validate quotation JavaScript
         run: |
           python - <<'PY'
           from pathlib import Path
           html = Path('index.html').read_text(encoding='utf-8')
-          assert 'function quoteDraftItems' not in html
-          assert 'function addQuoteItem()' in html
-          assert 'function printQuotePDF(id)' in html
-          assert 'replaceAll(String.fromCharCode(10),\'<br>\')' in html
-          assert '.replace(/[^0-9]/g,\'\')' in html
+          required = [
+              'function addQuoteItem()',
+              'function renderQuoteDraftItems()',
+              'function saveQuote()',
+              'function viewQuote(id)',
+              'function printQuotePDF(id)',
+              'function quoteWhatsApp(id)',
+              'function convertQuote(id)',
+              "q.notes.split(String.fromCharCode(10)).join('<br>')",
+              ".replace(/[^0-9]/g,'')",
+          ]
+          for item in required:
+              assert item in html, item
+          assert 'q.notes.replace(/' not in html
           print('Quotation JavaScript checks passed')
           PY
 
