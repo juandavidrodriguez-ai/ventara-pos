@@ -21,6 +21,9 @@ jobs:
       - name: Replace quotation module
         run: python tools/replace_quote_module.py
 
+      - name: Apply quotation preview styles
+        run: python tools/add_quote_styles.py
+
       - name: Validate quotation JavaScript
         run: |
           python - <<'PY'
@@ -37,6 +40,7 @@ jobs:
               'function convertQuote(id)',
               "q.notes.split(String.fromCharCode(10)).join('<br>')",
               ".replace(/[^0-9]/g,'')",
+              'ventara-quote-styles',
           ]
           for item in required:
               assert item in html, item
