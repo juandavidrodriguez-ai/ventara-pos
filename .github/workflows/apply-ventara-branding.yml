@@ -25,30 +25,31 @@ jobs:
           p = Path("index.html")
           html = p.read_text(encoding="utf-8")
 
-          # Use the exact complete Ventara wordmark supplied by the user.
-          # assets/ventara.png is the full transparent Ventara wordmark;
-          # ventara-logo.png is not the sidebar mark and must not be used here.
+          # The sidebar must use the exact complete Ventara wordmark supplied
+          # by the user. It is the transparent 608x206 asset assets/ventara.png.
+          # Replace both old file references and old inline/data-URI sidebar
+          # logos, while leaving the login/top logos untouched.
           html = re.sub(
-              r'(<(?:img)[^>]+src=["\'])(?:assets/ventara\.png|assets/ventara-logo\.png|assets/ventara-favicon\.png)["\']',
-              r'\1assets/ventara.png"',
+              r'(<div[^>]*class=["\']brand["\'][^>]*>\s*<img[^>]+src=["\'])(?:data:image/[^"\']+|assets/(?:ventara\.png|ventara-logo\.png|ventara-favicon\.png))(["\'])',
+              r'\1assets/ventara.png\2',
               html,
-              flags=re.I,
+              flags=re.I|re.S,
           )
 
           css = '''<style id="ventara-sidebar-branding">
-          .sidebar{background:#17324d!important;color:#fff!important}
-          .brand{display:flex!important;align-items:center!important;justify-content:center!important;padding:14px 8px 20px!important;min-height:86px!important}
+          .sidebar{background:#005f73!important;color:#fff!important}
+          .brand{display:flex!important;align-items:center!important;justify-content:center!important;padding:12px 8px 18px!important;min-height:86px!important}
           .brand img,.brand .logo-img{display:block!important;width:210px!important;height:auto!important;max-width:100%!important;max-height:64px!important;object-fit:contain!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;filter:drop-shadow(0 0 0.8px #fff) drop-shadow(0 0 1.8px #fff)!important}
           .brand strong,.brand span:not(:has(img)){display:none!important}
           .nav{color:#fff!important}
           .nav:hover{background:rgba(255,255,255,.12)!important;color:#fff!important}
           .nav.active{background:linear-gradient(90deg,var(--orange),var(--orange2))!important;color:#fff!important}
-          .navtitle{color:rgba(255,255,255,.65)!important}
+          .navtitle{color:rgba(255,255,255,.72)!important}
           </style>'''
 
-          # Replace an earlier generated branding block if it exists, so the
-          # white outline is always a silhouette-following drop shadow rather
-          # than a rectangular box/shadow.
+          # Remove any previous branding overrides before adding the corrected
+          # version. This prevents the old rectangular white shadow from
+          # surviving subsequent deployments.
           html = re.sub(
               r'<style id="ventara-sidebar-branding">.*?</style>\s*',
               '',
