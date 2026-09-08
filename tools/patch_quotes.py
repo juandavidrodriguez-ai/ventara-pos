@@ -22,7 +22,7 @@ function convertQuote(id){let q=quoteFor(id);if(!q||q.status==='Convertida')retu
 function renderCash('''
 
 pattern = r'function renderQuotes\(\).*?function renderCash\('
-updated, count = re.subn(pattern, new_quotes, html, count=1, flags=re.S)
+updated, count = re.subn(pattern, lambda _: new_quotes, html, count=1, flags=re.S)
 if count != 1:
     raise SystemExit('No se encontró el bloque de cotizaciones esperado')
 
