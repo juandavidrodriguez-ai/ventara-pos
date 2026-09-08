@@ -1,5 +1,7 @@
 name: Apply quotation updates
 
+# Keeps the quotation module synchronized with the production frontend.
+
 on:
   push:
     branches:
