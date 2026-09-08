@@ -17,7 +17,22 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Update quotation module
-        run: python tools/patch_quotes.py
+        run: |
+          python tools/patch_quotes.py
+          python tools/fix_quote_js.py
+
+      - name: Validate quotation JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html = Path('index.html').read_text(encoding='utf-8')
+          assert 'function quoteDraftItems' not in html
+          assert 'function addQuoteItem()' in html
+          assert 'function printQuotePDF(id)' in html
+          assert 'replaceAll(String.fromCharCode(10),\'<br>\')' in html
+          assert '.replace(/[^0-9]/g,\'\')' in html
+          print('Quotation JavaScript checks passed')
+          PY
 
       - name: Commit quotation changes
         run: |
