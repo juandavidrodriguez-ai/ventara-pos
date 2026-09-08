@@ -39,9 +39,44 @@ using (
   )
 );
 
--- Writes to ventara_state are intentionally kept behind the application/service role.
--- The browser must never receive a service-role key.
-drop policy if exists "ventara_state_write_company" on public.ventara_state;
+drop policy if exists "ventara_state_insert_company" on public.ventara_state;
+create policy "ventara_state_insert_company"
+on public.ventara_state
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.ventara_accounts a
+    where a.company_id = ventara_state.company_id
+      and a.user_id = auth.uid()
+      and a.active = true
+  )
+);
+
+drop policy if exists "ventara_state_update_company" on public.ventara_state;
+create policy "ventara_state_update_company"
+on public.ventara_state
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.ventara_accounts a
+    where a.company_id = ventara_state.company_id
+      and a.user_id = auth.uid()
+      and a.active = true
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.ventara_accounts a
+    where a.company_id = ventara_state.company_id
+      and a.user_id = auth.uid()
+      and a.active = true
+  )
+);
 
 comment on table public.ventara_state is
-  'Persistent VENTARA POS state per company. Browser uses Supabase publishable key; write policy is intentionally restricted.';
+  'Persistent VENTARA POS state per company. Browser uses Supabase publishable key; writes are limited to active VENTARA accounts in the same company.';
