@@ -23,6 +23,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
           html = Path('index.html').read_text(encoding='utf-8')
           required = [
               'function addQuoteItem()',
@@ -38,8 +39,11 @@ jobs:
           for item in required:
               assert item in html, item
           assert 'q.notes.replace(/' not in html
-          print('Quotation JavaScript checks passed')
+          scripts = re.findall(r'<script(?![^>]*src=)[^>]*>(.*?)</script>', html, flags=re.I|re.S)
+          Path('/tmp/ventara-inline.js').write_text('\n'.join(scripts), encoding='utf-8')
+          print('Quotation checks passed; inline scripts:', len(scripts))
           PY
+          node --check /tmp/ventara-inline.js
 
       - name: Commit quotation changes
         run: |
