@@ -20,13 +20,41 @@ jobs:
         run: python tools/add_quote_styles.py
       - name: Fix IVA module placement
         run: python tools/fix_iva_module_placement.py
+      - name: Fix credit checkout safely
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          path=Path('index.html')
+          text=path.read_text(encoding='utf-8')
+          if 'id="creditFields"' in text and 'function updateCreditInfo(total)' in text:
+              print('Credit checkout already patched; nothing to do')
+              raise SystemExit(0)
+          marker='function openPaymentModalPOS(){'
+          start=text.find(marker)
+          if start<0: raise SystemExit('STOP: openPaymentModalPOS not found')
+          end=text.find("let selectedPay='Efectivo';",start)
+          if end<0: raise SystemExit('STOP: payment handler marker not found')
+          replacement=r'''function openPaymentModalPOS(){if(!cart.length)return toast('Agrega productos a la venta');let subtotal=cart.reduce((a,i)=>a+i.qty*i.price,0),discount=+(document.getElementById('posDiscount')?.value||0),total=Math.max(0,subtotal-discount);let creditClients=db.clients.filter(c=>c.id!=='c1'&&c.creditEnabled!==false);let creditOptions=creditClients.map(c=>`<option value="${c.id}" ${c.id===posClient?'selected':''}>${c.name} · Disponible ${money(Math.max(0,(c.credit||0)-(c.balance||0)))}</option>`).join('');openModal(`<h2>💰 Cobrar VENTA</h2><p class="muted">Caja registradora · Total a cobrar</p><div style="text-align:center;background:#f4fbfd;padding:15px;border-radius:12px"><div class="muted">TOTAL</div><div style="font-size:38px;font-weight:900;color:#005f73">${money(total)}</div></div><h3>Forma de pago</h3><div class="payment-grid"><button id="pm-Efectivo" class="selected" onclick="selectPay('Efectivo')">💵 Efectivo</button><button id="pm-Tarjeta" onclick="selectPay('Tarjeta')">💳 Tarjeta</button><button id="pm-Transferencia" onclick="selectPay('Transferencia')">📲 Transferencia</button><button id="pm-Mixto" onclick="selectPay('Mixto')">🔀 Mixto</button><button id="pm-Crédito" onclick="selectPay('Crédito')">🧾 Crédito</button></div><div id="creditFields" style="display:none;margin-top:15px"><div class="field"><label>CLIENTE A CRÉDITO</label><select id="creditClient" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px" onchange="posClient=this.value;updateCreditInfo(${total})"><option value="">Selecciona un cliente</option>${creditOptions}</select></div><div id="creditInfo" class="muted" style="margin-top:8px"></div></div><div id="cashFields" style="margin-top:15px"><div class="field"><label>EFECTIVO RECIBIDO</label><input id="cashReceived" type="number" min="0" value="${total}" oninput="calcChange(${total})" onkeydown="if(event.key==='Enter')confirmPayment(${total})"></div><div class="totalline" style="font-size:18px;margin-top:10px"><span>Cambio</span><b id="cashChange">${money(0)}</b></div></div><div id="mixedFields" style="display:none;margin-top:15px"><div class="form"><div class="field"><label>Efectivo</label><input id="mixCash" type="number" value="0" oninput="calcMixed(${total})"></div><div class="field"><label>Tarjeta/Transferencia</label><input id="mixOther" type="number" value="${total}" oninput="calcMixed(${total})"></div></div><p id="mixStatus" class="muted"></p></div><div class="actions" style="margin-top:18px"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn success" style="padding:13px 22px" onclick="confirmPayment(${total})">✓ CONFIRMAR Y REGISTRAR VENTA</button></div>`);selectedPay='Efectivo';}
+function updateCreditInfo(total){let id=v('creditClient');if(id)posClient=id;let c=db.clients.find(x=>x.id===id);let el=document.getElementById('creditInfo');if(!el)return;if(!c){el.textContent='Selecciona un cliente con crédito habilitado.';return}let available=Math.max(0,(c.credit||0)-(c.balance||0));el.innerHTML=`Límite: <b>${money(c.credit||0)}</b> · Saldo actual: <b>${money(c.balance||0)}</b> · Disponible: <b>${money(available)}</b>`;}
+let selectedPay='Efectivo';function selectPay(method){selectedPay=method;document.querySelectorAll('.payment-grid button').forEach(b=>b.classList.remove('selected'));document.getElementById('pm-'+method)?.classList.add('selected');document.getElementById('cashFields').style.display=method==='Efectivo'?'block':'none';document.getElementById('mixedFields').style.display=method==='Mixto'?'block':'none';document.getElementById('creditFields').style.display=method==='Crédito'?'block':'none';if(method==='Crédito'){let sel=document.getElementById('creditClient');if(sel){if(!sel.value&&posClient!=='c1'&&db.clients.find(c=>c.id===posClient&&c.creditEnabled!==false))sel.value=posClient;updateCreditInfo(0)}}}
+function calcChange(total){let r=+(document.getElementById('cashReceived')?.value||0);document.getElementById('cashChange').textContent=money(Math.max(0,r-total))}
+function calcMixed(total){let a=+(document.getElementById('mixCash')?.value||0),b=+(document.getElementById('mixOther')?.value||0),d=a+b-total;document.getElementById('mixStatus').textContent=d>=0?'Pago completo · Cambio '+money(d):'Faltan '+money(Math.abs(d))}
+'''
+          text=text[:start]+replacement+text[end:]
+          old="function confirmPayment(total){if(selectedPay==='Efectivo'){let r=+(document.getElementById('cashReceived')?.value||0);if(r<total)return toast('El efectivo recibido es menor al total')}if(selectedPay==='Mixto'){let a=+(document.getElementById('mixCash')?.value||0),b=+(document.getElementById('mixOther')?.value||0);if(a+b<total)return toast('El pago mixto no cubre el total')}finishSale(selectedPay,total,true)}"
+          new="function confirmPayment(total){if(selectedPay==='Efectivo'){let r=+(document.getElementById('cashReceived')?.value||0);if(r<total)return toast('El efectivo recibido es menor al total')}if(selectedPay==='Mixto'){let a=+(document.getElementById('mixCash')?.value||0),b=+(document.getElementById('mixOther')?.value||0);if(a+b<total)return toast('El pago mixto no cubre el total')}if(selectedPay==='Crédito'){let id=v('creditClient');let c=db.clients.find(x=>x.id===id);if(!c)return toast('Selecciona un cliente para vender a crédito');if(c.creditEnabled===false)return toast('Este cliente no tiene el fiado habilitado');let available=Math.max(0,(c.credit||0)-(c.balance||0));if(total>available)return toast('La venta supera el crédito disponible de '+money(available));posClient=id}finishSale(selectedPay,total,true)}"
+          if old not in text: raise SystemExit('STOP: confirmPayment pattern not found')
+          text=text.replace(old,new,1)
+          path.write_text(text,encoding='utf-8')
+          PY
       - name: Validate all inline JavaScript
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
           html=Path('index.html').read_text(encoding='utf-8')
-          required=['function addQuoteItem()','function renderQuoteDraftItems()','function saveQuote()','function viewQuote(id)','function printQuotePDF(id)','function quoteWhatsApp(id)','function sendQuoteWhatsAppFromModal(id)','function convertQuote(id)','ventara-quote-styles','ventara-iva-module','ventaraPriceWithIva']
+          required=['function addQuoteItem()','function renderQuoteDraftItems()','function saveQuote()','function viewQuote(id)','function printQuotePDF(id)','function quoteWhatsApp(id)','function sendQuoteWhatsAppFromModal(id)','function convertQuote(id)','ventara-quote-styles','ventara-iva-module','ventaraPriceWithIva','function updateCreditInfo(total)','id="creditFields"']
           for x in required: assert x in html, x
           assert html.count('<script id="ventara-iva-module">') == 1
           scripts=re.findall(r'<script(?![^>]*src=)[^>]*>(.*?)</script>',html,flags=re.I|re.S)
@@ -39,5 +67,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet && exit 0
-          git commit -m "fix: restore frontend script execution after IVA update [skip ci]"
+          git commit -m "fix: credit customer selection at checkout [credit-fix-applied] [skip ci]"
           git push
