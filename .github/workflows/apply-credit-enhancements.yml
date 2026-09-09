@@ -1,0 +1,44 @@
+name: Apply credit and modal enhancements
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  enhance:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install enhancement script in index
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          html = p.read_text(encoding='utf-8')
+          marker = '<!-- VENTARA CREDIT ENHANCEMENTS V1 -->'
+          if marker not in html:
+              tag = f'{marker}\n<script src="ventara-credit-enhancements.js"></script>\n'
+              if '</body>' in html:
+                  html = html.replace('</body>', tag + '</body>', 1)
+              else:
+                  html += '\n' + tag
+              p.write_text(html, encoding='utf-8')
+          PY
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: add credit cartera and window controls [skip ci]"
+          git push
