@@ -238,6 +238,7 @@ function v(id){return document.getElementById(id)?.value||''}function openModal(
 });
 function clock(){document.getElementById('clock').textContent=new Date().toLocaleString('es-CO',{dateStyle:'medium',timeStyle:'short'})}setInterval(clock,1000);clock();nav();document.getElementById('topBusiness').textContent=db.settings.business;document.getElementById('topLogo').src=db.settings.logo||VENTARA_LOGO;initCloud();
 </script>
+
 <script id="ventara-iva-module">
 (()=>{
   const rates=[0,1,2,4,5,8,10,12,15,16,18,19,20,21,22,25,30,35];
