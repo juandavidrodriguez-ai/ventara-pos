@@ -28,10 +28,9 @@ jobs:
           p = Path('index.html')
           html = p.read_text(encoding='utf-8')
           marker = '<!-- VENTARA CREDIT ENHANCEMENTS V1 -->'
-          # Remove an earlier misplaced insertion (for example inside an
-          # inline print-ticket template), then add it immediately before the
-          # real final </body> of index.html.
-          html = re.sub(r'\\s*<!-- VENTARA CREDIT ENHANCEMENTS V1 -->\\s*<script src="ventara-credit-enhancements\\.js"></script>\\s*', '\\n', html, flags=re.I)
+          # Remove any earlier misplaced insertion and add the enhancement
+          # script immediately before the real final </body>.
+          html = re.sub(r'\s*<!-- VENTARA CREDIT ENHANCEMENTS V1 -->\s*<script src="ventara-credit-enhancements\.js"></script>\s*', '\n', html, flags=re.I)
           tag = f'{marker}\n<script src="ventara-credit-enhancements.js"></script>\n'
           if '</body>' in html:
               head, tail = html.rsplit('</body>', 1)
