@@ -24,15 +24,21 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          html = Path('index.html').read_text(encoding='utf-8')
+          import re
+          p = Path('index.html')
+          html = p.read_text(encoding='utf-8')
           marker = '<!-- VENTARA CREDIT ENHANCEMENTS V1 -->'
+          # Remove an earlier misplaced insertion (for example inside an
+          # inline print-ticket template), then add it immediately before the
+          # real final </body> of index.html.
+          html = re.sub(r'\\s*<!-- VENTARA CREDIT ENHANCEMENTS V1 -->\\s*<script src="ventara-credit-enhancements\\.js"></script>\\s*', '\\n', html, flags=re.I)
           tag = f'{marker}\n<script src="ventara-credit-enhancements.js"></script>\n'
-          if marker not in html:
-              if '</body>' in html:
-                  html = html.replace('</body>', tag + '</body>', 1)
-              else:
-                  html += '\n' + tag
-              Path('index.html').write_text(html, encoding='utf-8')
+          if '</body>' in html:
+              head, tail = html.rsplit('</body>', 1)
+              html = head + tag + '</body>' + tail
+          else:
+              html += '\n' + tag
+          p.write_text(html, encoding='utf-8')
           PY
       - name: Validate all inline JavaScript
         run: |
@@ -43,6 +49,8 @@ jobs:
           required=['function addQuoteItem()','function renderQuoteDraftItems()','function saveQuote()','function viewQuote(id)','function printQuotePDF(id)','function quoteWhatsApp(id)','function sendQuoteWhatsAppFromModal(id)','function convertQuote(id)','ventara-quote-styles','ventara-iva-module','ventaraPriceWithIva','ventara-credit-enhancements.js']
           for x in required: assert x in html, x
           assert html.count('<script id="ventara-iva-module">') == 1
+          assert html.count('ventara-credit-enhancements.js') == 1
+          assert html.rfind('</body>') > html.find('ventara-credit-enhancements.js')
           scripts=re.findall(r'<script(?![^>]*src=)[^>]*>(.*?)</script>',html,flags=re.I|re.S)
           Path('/tmp/ventara-inline.js').write_text('\n'.join(scripts),encoding='utf-8')
           PY
@@ -53,5 +61,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet && exit 0
-          git commit -m "feat: add credit cartera and modal controls [skip ci]"
+          git commit -m "fix: place credit enhancements at document end [skip ci]"
           git push
