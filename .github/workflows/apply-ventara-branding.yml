@@ -60,11 +60,23 @@ jobs:
           p.write_text(html, encoding='utf-8')
           PY
 
-      - name: Commit branding changes
+      - name: Load Ventara UI enhancements
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          html = p.read_text(encoding='utf-8')
+          tag = '<script src="ventara-ui-enhancements.js"></script>'
+          if tag not in html:
+              html = html.replace('</body>', tag + '\n</body>', 1)
+              p.write_text(html, encoding='utf-8')
+          PY
+
+      - name: Commit branding and UI changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet && exit 0
-          git commit -m "fix: use exact Ventara wordmark with silhouette outline [skip ci]"
+          git commit -m "feat: enable Ventara UI enhancements [skip ci]"
           git push
