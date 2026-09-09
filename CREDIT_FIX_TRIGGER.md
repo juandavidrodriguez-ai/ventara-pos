@@ -1,1 +1,1 @@
-Temporary trigger for the targeted credit checkout repair.
+Retrigger targeted credit checkout repair.
