@@ -53,7 +53,7 @@ jobs:
           p.write_text(html, encoding='utf-8')
           PY
 
-      - name: Install article categories module
+      - name: Install article categories module safely
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -62,12 +62,17 @@ jobs:
           script='<script src="ventara-categories.js"></script>'
           marker="<button class=\"btn primary\" onclick=\"openProductModal()\">+ Nuevo artículo</button><button class=\"btn\" onclick=\"exportCSV('products')\">Exportar CSV</button>"
           replacement="<button class=\"btn primary\" onclick=\"openProductModal()\">+ Nuevo artículo</button><button class=\"btn\" onclick=\"openCategoriesModal()\">📂 Categorías</button><button class=\"btn\" onclick=\"exportCSV('products')\">Exportar CSV</button>"
-          if script not in s:
-              if marker not in s:
-                  raise SystemExit('No se encontró el bloque exacto de Artículos; no se modifica index.html.')
-              s=s.replace(marker,replacement,1)
-              s=s.replace('</body></html>',script+'\n</body></html>',1)
-              p.write_text(s,encoding='utf-8')
+          # Remove any previous mistaken insertion of the module from a nested
+          # print/template string before installing it at the real document end.
+          s=s.replace(script,'')
+          if marker not in s:
+              raise SystemExit('No se encontró el bloque exacto de Artículos; no se modifica index.html.')
+          s=s.replace(marker,replacement,1)
+          parts=s.rsplit('</body></html>',1)
+          if len(parts)!=2:
+              raise SystemExit('No se encontró el cierre real del documento; no se modifica index.html.')
+          s=parts[0]+script+'\n</body></html>'+parts[1]
+          p.write_text(s,encoding='utf-8')
           PY
 
       - name: Commit branding and category changes
@@ -76,5 +81,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet && exit 0
-          git commit -m "feat: add article categories [skip ci]"
+          git commit -m "fix: install article categories correctly [skip ci]"
           git push
