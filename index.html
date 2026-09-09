@@ -39,9 +39,6 @@
 .nav.active{background:linear-gradient(90deg,var(--orange),var(--orange2))!important;color:#fff!important}
 .navtitle{color:#17324d!important;opacity:.65!important}
 </style>
-<style id="ventara-quote-styles">
-.quote-doc{max-width:900px;margin:auto;color:#172033;background:#fff}.quote-head{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #0ea5e9;padding-bottom:16px}.quote-head>div:first-child{display:flex;gap:14px;align-items:center}.quote-logo{width:150px;height:auto;max-height:70px;object-fit:contain}.quote-head h1{margin:0 0 5px;font-size:22px}.quote-meta{text-align:right;display:flex;flex-direction:column;gap:4px}.quote-meta b{color:#0284c7;font-size:19px}.quote-meta strong{font-size:17px}.quote-client{margin:18px 0;padding:14px;background:#f1f5f9;border-radius:8px}.quote-table{width:100%;border-collapse:collapse}.quote-table th,.quote-table td{border-bottom:1px solid #dbe3ea;padding:9px;text-align:left}.quote-table th{background:#0f172a;color:#fff}.quote-table th:nth-child(n+2),.quote-table td:nth-child(n+2){text-align:right}.quote-table tfoot td{font-weight:700;font-size:16px;border-top:2px solid #0f172a}.quote-notes{margin-top:20px;padding:14px;border-left:4px solid #0ea5e9;background:#f8fafc}.quote-footer{margin-top:24px;padding-top:10px;border-top:1px solid #dbe3ea;color:#64748b;font-size:11px}
-</style>
 <style id="ventara-sidebar-branding">
 .sidebar{background:#005f73!important;color:#fff!important}
 .brand{display:flex!important;align-items:center!important;justify-content:center!important;padding:12px 8px 18px!important;min-height:86px!important}
@@ -51,6 +48,9 @@
 .nav:hover{background:rgba(255,255,255,.12)!important;color:#fff!important}
 .nav.active{background:linear-gradient(90deg,var(--orange),var(--orange2))!important;color:#fff!important}
 .navtitle{color:rgba(255,255,255,.72)!important}
+</style>
+<style id="ventara-quote-styles">
+.quote-doc{max-width:900px;margin:auto;color:#172033;background:#fff}.quote-head{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #0ea5e9;padding-bottom:16px}.quote-head>div:first-child{display:flex;gap:14px;align-items:center}.quote-logo{width:150px;height:auto;max-height:70px;object-fit:contain}.quote-head h1{margin:0 0 5px;font-size:22px}.quote-meta{text-align:right;display:flex;flex-direction:column;gap:4px}.quote-meta b{color:#0284c7;font-size:19px}.quote-meta strong{font-size:17px}.quote-client{margin:18px 0;padding:14px;background:#f1f5f9;border-radius:8px}.quote-table{width:100%;border-collapse:collapse}.quote-table th,.quote-table td{border-bottom:1px solid #dbe3ea;padding:9px;text-align:left}.quote-table th{background:#0f172a;color:#fff}.quote-table th:nth-child(n+2),.quote-table td:nth-child(n+2){text-align:right}.quote-table tfoot td{font-weight:700;font-size:16px;border-top:2px solid #0f172a}.quote-notes{margin-top:20px;padding:14px;border-left:4px solid #0ea5e9;background:#f8fafc}.quote-footer{margin-top:24px;padding-top:10px;border-top:1px solid #dbe3ea;color:#64748b;font-size:11px}
 </style>
 </head>
 <body>
@@ -238,6 +238,7 @@ function v(id){return document.getElementById(id)?.value||''}function openModal(
 });
 function clock(){document.getElementById('clock').textContent=new Date().toLocaleString('es-CO',{dateStyle:'medium',timeStyle:'short'})}setInterval(clock,1000);clock();nav();document.getElementById('topBusiness').textContent=db.settings.business;document.getElementById('topLogo').src=db.settings.logo||VENTARA_LOGO;initCloud();
 </script>
+
 
 <script id="ventara-iva-module">
 (()=>{
