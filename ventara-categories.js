@@ -22,4 +22,4 @@
   new MutationObserver(()=>patchProductModal()).observe(document.documentElement,{subtree:true,childList:true});
   setInterval(()=>patchProductModal(),500);
 })();
-/* category-module-ready-3 */
+/* category-module-ready-4 */
