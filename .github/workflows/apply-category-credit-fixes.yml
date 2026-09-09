@@ -1,0 +1,44 @@
+name: Apply category and cartera fixes
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure runtime fix is loaded and menu label is correct
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          html = p.read_text(encoding='utf-8')
+
+          html = html.replace('Fiados / Crédito', 'Cartera y Crédito')
+          html = html.replace('F7</span> Fiados', 'F7</span> Cartera')
+
+          if 'src="auth-fix.js"' not in html and "src='auth-fix.js'" not in html:
+              html = html.replace('</body>', '  <script src="auth-fix.js?v=cartera-categorias-1"></script>\n</body>', 1)
+
+          p.write_text(html, encoding='utf-8')
+          PY
+
+      - name: Commit source changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: load category and cartera runtime fixes [skip ci]"
+          git push
