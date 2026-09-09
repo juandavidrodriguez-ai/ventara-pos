@@ -28,11 +28,12 @@ jobs:
           s=p.read_text(encoding='utf-8')
           script='<script src="ventara-categories.js"></script>'
           s=s.replace(script,'')
-          needle='onclick="openProductModal()">+ Nuevo artículo</button>'
-          addition='onclick="openProductModal()">+ Nuevo artículo</button><button class="btn" onclick="openCategoriesModal()">📂 Categorías</button>'
-          if needle not in s:
-              raise SystemExit('No se encontró el botón Nuevo artículo; no se modifica index.html.')
-          s=s.replace(needle,addition,1)
+          if 'onclick="openCategoriesModal()">📂 Categorías</button>' not in s:
+              needle='onclick="openProductModal()">+ Nuevo artículo</button>'
+              addition='onclick="openProductModal()">+ Nuevo artículo</button><button class="btn" onclick="openCategoriesModal()">📂 Categorías</button>'
+              if needle not in s:
+                  raise SystemExit('No se encontró el botón Nuevo artículo; no se modifica index.html.')
+              s=s.replace(needle,addition,1)
           idx=s.rfind('</body></html>')
           if idx<0:
               raise SystemExit('No se encontró el cierre real del documento; no se modifica index.html.')
