@@ -1,0 +1,36 @@
+name: Apply Ventara UI enhancements once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject UI enhancement script into main document
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          html=p.read_text(encoding='utf-8')
+          tag='<script src="ventara-ui-enhancements.js"></script>'
+          html=html.replace(tag,'')
+          pos=html.rfind('</body>')
+          if pos < 0: raise SystemExit('No se encontró </body>')
+          html=html[:pos]+tag+'\n'+html[pos:]
+          p.write_text(html,encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'feat: enable Ventara UI enhancements [skip ci]'
+          git push
