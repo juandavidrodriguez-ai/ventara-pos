@@ -25,6 +25,10 @@ jobs:
           p = Path("index.html")
           html = p.read_text(encoding="utf-8")
 
+          # The sidebar must use the exact complete Ventara wordmark supplied
+          # by the user. It is the transparent 608x206 asset assets/ventara.png.
+          # Replace both old file references and old inline/data-URI sidebar
+          # logos, while leaving the login/top logos untouched.
           html = re.sub(
               r'(<div[^>]*class=["\']brand["\'][^>]*>\s*<img[^>]+src=["\'])(?:data:image/[^"\']+|assets/(?:ventara\.png|ventara-logo\.png|ventara-favicon\.png))(["\'])',
               r'\1assets/ventara.png\2',
@@ -43,6 +47,9 @@ jobs:
           .navtitle{color:rgba(255,255,255,.72)!important}
           </style>'''
 
+          # Remove any previous branding overrides before adding the corrected
+          # version. This prevents the old rectangular white shadow from
+          # surviving subsequent deployments.
           html = re.sub(
               r'<style id="ventara-sidebar-branding">.*?</style>\s*',
               '',
@@ -53,33 +60,11 @@ jobs:
           p.write_text(html, encoding='utf-8')
           PY
 
-      - name: Install article categories module safely
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          script='<script src="ventara-categories.js"></script>'
-          marker="<button class=\"btn primary\" onclick=\"openProductModal()\">+ Nuevo artículo</button><button class=\"btn\" onclick=\"exportCSV('products')\">Exportar CSV</button>"
-          replacement="<button class=\"btn primary\" onclick=\"openProductModal()\">+ Nuevo artículo</button><button class=\"btn\" onclick=\"openCategoriesModal()\">📂 Categorías</button><button class=\"btn\" onclick=\"exportCSV('products')\">Exportar CSV</button>"
-          # Remove any previous mistaken insertion of the module from a nested
-          # print/template string before installing it at the real document end.
-          s=s.replace(script,'')
-          if marker not in s:
-              raise SystemExit('No se encontró el bloque exacto de Artículos; no se modifica index.html.')
-          s=s.replace(marker,replacement,1)
-          parts=s.rsplit('</body></html>',1)
-          if len(parts)!=2:
-              raise SystemExit('No se encontró el cierre real del documento; no se modifica index.html.')
-          s=parts[0]+script+'\n</body></html>'+parts[1]
-          p.write_text(s,encoding='utf-8')
-          PY
-
-      - name: Commit branding and category changes
+      - name: Commit branding changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet && exit 0
-          git commit -m "fix: install article categories correctly [skip ci]"
+          git commit -m "fix: use exact Ventara wordmark with silhouette outline [skip ci]"
           git push
