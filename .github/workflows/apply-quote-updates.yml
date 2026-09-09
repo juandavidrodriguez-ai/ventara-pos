@@ -20,26 +20,6 @@ jobs:
         run: python tools/add_quote_styles.py
       - name: Fix IVA module placement
         run: python tools/fix_iva_module_placement.py
-      - name: Install article categories module safely
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          script='<script src="ventara-categories.js"></script>'
-          s=s.replace(script,'')
-          if 'onclick="openCategoriesModal()">📂 Categorías</button>' not in s:
-              needle='onclick="openProductModal()">+ Nuevo artículo</button>'
-              addition='onclick="openProductModal()">+ Nuevo artículo</button><button class="btn" onclick="openCategoriesModal()">📂 Categorías</button>'
-              if needle not in s:
-                  raise SystemExit('No se encontró el botón Nuevo artículo; no se modifica index.html.')
-              s=s.replace(needle,addition,1)
-          idx=s.rfind('</body></html>')
-          if idx<0:
-              raise SystemExit('No se encontró el cierre real del documento; no se modifica index.html.')
-          s=s[:idx]+script+'\n'+s[idx:]
-          p.write_text(s,encoding='utf-8')
-          PY
       - name: Validate all inline JavaScript
         run: |
           python - <<'PY'
@@ -49,8 +29,6 @@ jobs:
           required=['function addQuoteItem()','function renderQuoteDraftItems()','function saveQuote()','function viewQuote(id)','function printQuotePDF(id)','function quoteWhatsApp(id)','function sendQuoteWhatsAppFromModal(id)','function convertQuote(id)','ventara-quote-styles','ventara-iva-module','ventaraPriceWithIva']
           for x in required: assert x in html, x
           assert html.count('<script id="ventara-iva-module">') == 1
-          assert html.count('<script src="ventara-categories.js"></script>') == 1
-          assert html.rfind('<script src="ventara-categories.js"></script>') < html.rfind('</body></html>')
           scripts=re.findall(r'<script(?![^>]*src=)[^>]*>(.*?)</script>',html,flags=re.I|re.S)
           Path('/tmp/ventara-inline.js').write_text('\n'.join(scripts),encoding='utf-8')
           PY
@@ -61,5 +39,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet && exit 0
-          git commit -m "fix: install article categories correctly [skip ci]"
+          git commit -m "fix: restore frontend script execution after IVA update [skip ci]"
           git push
