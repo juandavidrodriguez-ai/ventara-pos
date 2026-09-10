@@ -17,18 +17,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply minimal POS ticket fix
+      - name: Apply POS automatic ticket printing
         shell: python
         run: |
           from pathlib import Path
           p = Path('index.html')
           s = p.read_text(encoding='utf-8')
 
-          old = "finishSale(selectedPay,total,true)"
-          new = "finishSale(selectedPay,total,false)"
+          old = "finishSale(selectedPay,total,false)"
+          new = "finishSale(selectedPay,total,true)"
           if old in s:
               s = s.replace(old, new, 1)
-          elif new not in s:
+
+          if new not in s:
               raise SystemExit('Expected POS payment call was not found; file left unchanged.')
 
           p.write_text(s, encoding='utf-8')
@@ -43,5 +44,5 @@ jobs:
             exit 0
           fi
           git add index.html
-          git commit -m "fix: show POS ticket preview after sale"
+          git commit -m "fix: keep automatic POS ticket printing enabled"
           git push
