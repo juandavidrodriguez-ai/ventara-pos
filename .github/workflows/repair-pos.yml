@@ -19,26 +19,35 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           path = Path('index.html')
           text = path.read_text(encoding='utf-8')
 
-          old = "log('Venta registrada',sale.number);"
-          new = "if(typeof log==='function')log('Venta registrada',sale.number);"
-          if old in text:
-              text = text.replace(old, new, 1)
+          # Prevent the sale from failing because an optional logger is missing.
+          text = text.replace(
+              "log('Venta registrada',sale.number);",
+              "if(typeof log==='function')log('Venta registrada',sale.number);",
+              1,
+          )
 
-          # Avoid collisions between a DOM element/global named `toast` and the
-          # notification function used by the POS code.
-          text = text.replace('toast(', '_ventaraToast(')
+          # Confirming payment immediately opens the POS ticket and invokes print.
+          text = text.replace(
+              "finishSale(selectedPay,total,false)",
+              "finishSale(selectedPay,total,true)",
+              1,
+          )
+
+          # Rename only standalone toast calls. This is intentionally idempotent:
+          # it must not turn _ventaraToast( into _ventara_ventaraToast( on later runs.
+          text = re.sub(r'(?<![A-Za-z0-9_$])toast\\(', '_ventaraToast(', text)
 
           patch = '''\n<script>\n(function(){\n  if(typeof window._ventaraToast !== 'function'){\n    window._ventaraToast=function(message){\n      var el=document.getElementById('toast');\n      if(!el){\n        el=document.createElement('div');\n        el.id='toast';\n        el.style.cssText='position:fixed;right:20px;bottom:20px;z-index:99999;background:#111;color:#fff;padding:12px 16px;border-radius:10px;font-weight:700;box-shadow:0 8px 30px rgba(0,0,0,.25);max-width:360px';\n        document.body.appendChild(el);\n      }\n      el.textContent=message||'';\n      el.style.display='block';\n      clearTimeout(window._ventaraToastTimer);\n      window._ventaraToastTimer=setTimeout(function(){el.style.display='none';},3000);\n    };\n  }\n})();\n</script>\n'''
           if 'window._ventaraToast=function' not in text:
               text = text.replace('</body>', patch + '</body>')
-          elif '</body>' not in text:
-              text += patch
 
           path.write_text(text, encoding='utf-8')
+
       - name: Commit repair
         shell: bash
         run: |
