@@ -1,0 +1,58 @@
+name: Fix POS ticket printing
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-pos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch POS sale flow
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("index.html")
+          text = path.read_text(encoding="utf-8")
+
+          replacements = [
+              (
+                  "finishSale(selectedPay,total,false)",
+                  "finishSale(selectedPay,total,true)"
+              ),
+              (
+                  "log('Venta registrada',sale.number);save();cart=[];closeModal();renderPOS();toast('FACTURA registrada · '+sale.number);if(autoPrint)printTicket(sale.id);else setTimeout(()=>offerTicket(sale.id),250)",
+                  "if(typeof log==='function'){log('Venta registrada',sale.number);}save();cart=[];closeModal();renderPOS();if(autoPrint)printTicket(sale.id);else setTimeout(()=>offerTicket(sale.id),250);if(typeof toast==='function'){toast('FACTURA registrada · '+sale.number);}"
+              )
+          ]
+
+          changed = False
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new, 1)
+                  changed = True
+
+          if not changed:
+              raise SystemExit("No se encontraron los fragmentos esperados en index.html")
+
+          path.write_text(text, encoding="utf-8")
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "fix: print POS ticket automatically after payment"
+          git push
