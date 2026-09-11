@@ -43,6 +43,11 @@
 /* VENTARA POS - Flujo de ticket POS después del cobro */
 (()=>{
   function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+  function ticketHtml(s){
+    const logo=db.settings.logo||VENTARA_LOGO;
+    const rows=s.items.map(i=>`<div class="r"><span>${esc(i.qty)} x ${esc(i.name)}</span><span>${money(i.qty*i.price)}</span></div>`).join('');
+    return `<html><head><title>${esc(s.number)}</title><style>@page{size:80mm auto;margin:0}html,body{margin:0;padding:0;background:#fff}body{font-family:'Courier New',monospace;font-size:12px;color:#000}.toolbar{position:sticky;top:0;background:#eef2f7;padding:10px;text-align:center;font-family:Arial,sans-serif;display:flex;gap:8px;justify-content:center}.toolbar button{padding:9px 13px;border:0;border-radius:7px;font-weight:700;cursor:pointer}.toolbar .primary{background:#009fe3;color:#fff}.ticket80{width:80mm;box-sizing:border-box;padding:3mm;margin:0 auto}.c{text-align:center}.r{display:flex;justify-content:space-between;gap:5px}.r span:first-child{max-width:55mm;word-break:break-word}.hr{border-top:1px dashed #000;margin:6px 0}img{max-width:48mm;max-height:22mm;object-fit:contain}h2{font-size:17px;margin:4px 0}@media print{.toolbar{display:none!important}body{width:80mm}.ticket80{margin:0}}</style></head><body><div class="toolbar"><button class="primary" onclick="doPrint()">🖨 Imprimir ticket</button><button onclick="window.close()">Cerrar</button></div><div class="ticket80"><div class="c"><img src="${logo}"><h2>${esc(db.settings.business)}</h2><div>${esc(db.settings.nit||'')}</div><div>${esc(db.settings.city||'')}</div><div>${esc(db.settings.phone||'')}</div></div><div class="hr"></div><div><b>FACTURA POS ${esc(s.number)}</b><br>${esc(s.date)} ${esc(s.time)}<br>Cliente: ${esc(clientName(s.clientId))}</div><div class="hr"></div>${rows}<div class="hr"></div><div class="r"><b>TOTAL</b><b>${money(s.total)}</b></div><div class="r"><span>Medio de pago</span><span>${esc(s.method)}</span></div>${s.method==='Crédito'?`<div class="r"><span>Plazo</span><span>${db.clients.find(c=>c.id===s.clientId)?.creditDays||0} días</span></div>`:''}<div class="hr"></div><div class="c">Gracias por su compra<br>VENTARA POS</div></div><script>window.doPrint=function(){window.print()}</script></body></html>`;
+  }
   window.offerTicket=function(id){
     if(!window.db)return;
     const s=db.sales.find(x=>x.id===id);if(!s)return;
@@ -51,12 +56,13 @@
   window.printTicket=function(id,autoPrint=false){
     if(!window.db)return;
     const s=db.sales.find(x=>x.id===id);if(!s)return;
-    const logo=db.settings.logo||VENTARA_LOGO;
-    const rows=s.items.map(i=>`<div class="r"><span>${esc(i.qty)} x ${esc(i.name)}</span><span>${money(i.qty*i.price)}</span></div>`).join('');
     const w=window.open('','_blank','width=460,height=850');
     if(!w)return toast('El navegador bloqueó la ventana del ticket');
-    w.document.write(`<html><head><title>${esc(s.number)}</title><style>@page{size:80mm auto;margin:0}html,body{margin:0;padding:0;background:#fff}body{font-family:'Courier New',monospace;font-size:12px;color:#000}.toolbar{position:sticky;top:0;background:#eef2f7;padding:10px;text-align:center;font-family:Arial,sans-serif;display:flex;gap:8px;justify-content:center}.toolbar button{padding:9px 13px;border:0;border-radius:7px;font-weight:700;cursor:pointer}.toolbar .primary{background:#009fe3;color:#fff}.ticket80{width:80mm;box-sizing:border-box;padding:3mm;margin:0 auto}.c{text-align:center}.r{display:flex;justify-content:space-between;gap:5px}.r span:first-child{max-width:55mm;word-break:break-word}.hr{border-top:1px dashed #000;margin:6px 0}img{max-width:48mm;max-height:22mm;object-fit:contain}h2{font-size:17px;margin:4px 0}@media print{.toolbar{display:none!important}body{width:80mm}.ticket80{margin:0}}</style></head><body><div class="toolbar"><button class="primary" onclick="doPrint()">🖨 Imprimir ticket</button><button onclick="window.close()">Cerrar</button></div><div class="ticket80"><div class="c"><img src="${logo}"><h2>${esc(db.settings.business)}</h2><div>${esc(db.settings.nit||'')}</div><div>${esc(db.settings.city||'')}</div><div>${esc(db.settings.phone||'')}</div></div><div class="hr"></div><div><b>FACTURA POS ${esc(s.number)}</b><br>${esc(s.date)} ${esc(s.time)}<br>Cliente: ${esc(clientName(s.clientId))}</div><div class="hr"></div>${rows}<div class="hr"></div><div class="r"><b>TOTAL</b><b>${money(s.total)}</b></div><div class="r"><span>Medio de pago</span><span>${esc(s.method)}</span></div>${s.method==='Crédito'?`<div class="r"><span>Plazo</span><span>${db.clients.find(c=>c.id===s.clientId)?.creditDays||0} días</span></div>`:''}<div class="hr"></div><div class="c">Gracias por su compra<br>VENTARA POS</div></div><script>window.doPrint=function(){window.print()};${autoPrint?'window.addEventListener("load",()=>setTimeout(doPrint,250));':''}</script></body></html>`);
+    w.document.write(ticketHtml(s));
     w.document.close();
+    if(autoPrint){
+      w.addEventListener('load',()=>setTimeout(()=>{try{w.focus();w.print()}catch(e){}},250),{once:true});
+    }
   };
 })();
 
@@ -69,26 +75,61 @@ document.addEventListener('keydown',function(e){
   }
 });
 
-/* VENTARA POS - Instalar el flujo automático DESPUÉS de que index.html haya definido finishSale */
-function installAutoTicketFlow(){
-  if(window.__ventaraAutoTicketInstalled)return;
-  if(typeof window.finishSale!=='function'){
-    setTimeout(installAutoTicketFlow,100);
-    return;
+/* VENTARA POS - Impresión automática sin depender de que finishSale sea global.
+   Se abre la ventana del ticket durante el clic del usuario para evitar bloqueos del navegador.
+   Luego de que la venta se registre, se rellena el ticket y se lanza la impresión. */
+(()=>{
+  let pendingTicketWindow=null;
+  let pendingSalesCount=0;
+  let pendingActive=false;
+
+  function isConfirmButton(target){
+    const b=target?.closest?.('button');
+    if(!b)return false;
+    const text=(b.textContent||'').replace(/\s+/g,' ').trim().toUpperCase();
+    return text.includes('CONFIRMAR Y REGISTRAR VENTA');
   }
-  const originalFinishSale=window.finishSale;
-  window.finishSale=function(methodOverride,totalOverride,autoPrint=false){
-    /* El clic del usuario llega a finishSale a través de confirmPayment.
-       Forzamos la impresión automática y luego mostramos el resumen/ticket.
-       No reemplazamos printTicket, para no interferir con la función original. */
-    const result=originalFinishSale.call(this,methodOverride,totalOverride,true);
-    const saleId=window.db?.sales?.[0]?.id||null;
-    if(saleId)setTimeout(()=>window.offerTicket(saleId),350);
-    return result;
-  };
-  window.__ventaraAutoTicketInstalled=true;
-  console.log('VENTARA: flujo automático de ticket instalado');
-}
-if(document.readyState==='complete')setTimeout(installAutoTicketFlow,0);
-else window.addEventListener('load',installAutoTicketFlow,{once:true});
-/* auto-ticket-flow-ready-2 */
+
+  function waitForNewSale(){
+    if(!pendingActive)return;
+    const sales=window.db?.sales;
+    if(Array.isArray(sales)&&sales.length>pendingSalesCount){
+      const sale=sales[0];
+      pendingActive=false;
+      if(pendingTicketWindow&&!pendingTicketWindow.closed){
+        try{
+          pendingTicketWindow.document.open();
+          pendingTicketWindow.document.write(ticketHtml(sale));
+          pendingTicketWindow.document.close();
+          pendingTicketWindow.addEventListener('load',()=>setTimeout(()=>{
+            try{pendingTicketWindow.focus();pendingTicketWindow.print()}catch(e){}
+          },250),{once:true});
+        }catch(e){
+          try{pendingTicketWindow.close()}catch(_){}
+        }
+      }else{
+        window.offerTicket(sale.id);
+      }
+      pendingTicketWindow=null;
+      return;
+    }
+    setTimeout(waitForNewSale,80);
+  }
+
+  document.addEventListener('click',function(e){
+    if(!isConfirmButton(e.target))return;
+    const sales=window.db?.sales;
+    pendingSalesCount=Array.isArray(sales)?sales.length:0;
+    pendingActive=true;
+    pendingTicketWindow=window.open('about:blank','_blank','width=460,height=850');
+    if(pendingTicketWindow){
+      try{
+        pendingTicketWindow.document.write('<html><head><title>VENTARA POS</title></head><body style="font-family:Arial,sans-serif;padding:30px;text-align:center"><h3>Preparando ticket...</h3><p>La venta se está registrando.</p></body></html>');
+        pendingTicketWindow.document.close();
+      }catch(err){}
+    }
+    setTimeout(waitForNewSale,50);
+    setTimeout(()=>{if(pendingActive){pendingActive=false;pendingTicketWindow=null}},10000);
+  },true);
+})();
+/* auto-ticket-flow-ready-3 */
