@@ -70,7 +70,7 @@
       if(btn.dataset.ventaraBound==='1')return;btn.dataset.ventaraBound='1';btn.addEventListener('click',()=>{const m=String(btn.id||'').replace(/^pm-/,'');window.__ventaraPaymentMethod=m;setGlobalLexical('selectedPay',m);setTimeout(()=>renderPaymentFields(m,total),0)})
     });
     const confirm=actions.querySelector('button.success');
-    if(confirm&&!confirm.dataset.ventaraBound){confirm.dataset.ventaraBound='1';confirm.onclick=function(e){e.preventDefault();e.stopPropagation();return window.confirmPayment(total)}}
+    if(confirm&&!confirm.dataset.ventaraBound){confirm.dataset.ventaraBound='1';confirm.onclick=function(e){e.preventDefault();e.stopPropagation();return window.confirmPayment(total,e)}}
     updateConfirmButton(total);
   }
   function renderPaymentFields(method,total){
@@ -78,7 +78,7 @@
     const d=db();const clients=(d?.clients||[]).filter(c=>c&&c.id&&c.id!=='c1');
     let html='';
     if(method==='Efectivo')html=`<div class="field"><label>EFECTIVO RECIBIDO</label><input id="cashReceived" type="number" min="0" step="0.01" value="${esc(total)}"><div class="totalline" style="font-size:18px;margin-top:10px"><span>Cambio</span><b id="cashChange">${money(0)}</b></div></div>`;
-    else if(method==='Tarjeta')html=`<div class="form"><div class="field"><label>TIPO DE TARJETA *</label><select id="cardType"><option value="">Selecciona...</option><option value="Débito">Débito</option><option value="Crédito">Crédito</option></select></div><div class="field"><label>FRANQUICIA</label><select id="cardBrand"><option value="Visa">Visa</option><option value="Mastercard">Mastercard</option><option value="Otra">Otra</option></select></div></div>`;
+    else if(method==='Tarjeta')html=`<div class="form"><div class="field"><label>TIPO DE TARJETA *</label><select id="cardType"><option value="">Selecciona...</option><option value="Débito">Débito</option><option value="Crédito Visa">Crédito Visa</option><option value="Crédito Mastercard">Crédito Mastercard</option></select></div></div>`;
     else if(method==='Transferencia')html=`<div class="field"><label>BANCO / BILLETERA *</label><select id="transferProvider"><option value="">Selecciona...</option><option value="Nequi">Nequi</option><option value="Daviplata">Daviplata</option><option value="Bancolombia">Bancolombia</option><option value="Otros">Otros</option></select></div>`;
     else if(method==='Mixto')html=`<div class="form"><div class="field"><label>MONTO EN EFECTIVO *</label><input id="mixCash" type="number" min="0" step="0.01" value="0"></div><div class="field"><label>MONTO TARJETA / TRANSFERENCIA *</label><input id="mixOther" type="number" min="0" step="0.01" value="${esc(total)}"></div></div><p id="mixStatus" class="muted">La suma debe ser exactamente ${money(total)}.</p>`;
     else if(method==='Crédito')html=`<div class="field"><label>CLIENTE PARA CRÉDITO *</label><select id="creditClient"><option value="">Selecciona un cliente...</option>${clients.map(c=>`<option value="${esc(c.id)}">${esc(c.name||'Cliente')} · ${esc(c.doc||c.nit||'Sin documento')}</option>`).join('')}</select></div>`;
@@ -97,14 +97,18 @@
     if(m==='Crédito')ok=!!document.getElementById('creditClient')?.value;
     b.disabled=!ok;b.style.opacity=ok?'1':'.55';b.title=ok?'':'Completa los datos obligatorios del método de pago';
   }
-  window.confirmPayment=function(total){
+  window.confirmPayment=function(total,e){
+    if(e&&typeof e.preventDefault==='function')e.preventDefault();
+    if(e&&typeof e.stopPropagation==='function')e.stopPropagation();
     const m=window.__ventaraPaymentMethod||'Efectivo';const amount=Number(total||0);let meta={method:m};
     if(m==='Efectivo'){const received=Number(document.getElementById('cashReceived')?.value||0);if(received<amount)return notify('El efectivo recibido es menor al total.');meta.received=received;meta.change=received-amount}
-    else if(m==='Tarjeta'){const type=document.getElementById('cardType')?.value;if(!type)return notify('Selecciona Débito o Crédito.');meta.cardType=type;meta.cardBrand=document.getElementById('cardBrand')?.value||'';meta.received=amount;meta.change=0}
+    else if(m==='Tarjeta'){const type=document.getElementById('cardType')?.value;if(!type)return notify('Selecciona el tipo de tarjeta.');meta.cardType=type;meta.received=amount;meta.change=0}
     else if(m==='Transferencia'){const provider=document.getElementById('transferProvider')?.value;if(!provider)return notify('Selecciona el banco o billetera.');meta.transferProvider=provider;meta.received=amount;meta.change=0}
     else if(m==='Mixto'){const cash=Number(document.getElementById('mixCash')?.value||0),other=Number(document.getElementById('mixOther')?.value||0);if(Math.abs(cash+other-amount)>=0.005)return notify('En pago mixto, efectivo + tarjeta/transferencia debe ser exactamente igual al total.');meta.mixCash=cash;meta.mixOther=other;meta.received=amount;meta.change=0}
     else if(m==='Crédito'){const clientId=document.getElementById('creditClient')?.value;if(!clientId)return notify('Selecciona un cliente para vender a crédito.');setGlobalLexical('posClient',clientId);meta.creditClientId=clientId;meta.received=amount;meta.change=0}
-    window.__ventaraPaymentMeta=meta;setGlobalLexical('selectedPay',m);if(typeof originalFinish==='function')return originalFinish.call(window,m,amount,true);return false;
+    window.__ventaraPaymentMeta=meta;setGlobalLexical('selectedPay',m);
+    if(typeof originalFinish==='function')return originalFinish.call(window,m,amount,true);
+    return false;
   };
   const originalFinishWrapper=window.finishSale;
   if(typeof originalFinishWrapper==='function'){
@@ -133,7 +137,7 @@
       const method=window.__ventaraPaymentMethod||window.selectedPay||'Efectivo';
       try{
         if(typeof window.confirmPayment==='function'){
-          const result=window.confirmPayment(total);
+          const result=window.confirmPayment(total,e);
           if(result&&typeof result.then==='function')await result;
           return;
         }
