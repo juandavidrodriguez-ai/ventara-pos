@@ -35,22 +35,84 @@
       const mixCash=document.getElementById('mixCash')?.value;
       const mixOther=document.getElementById('mixOther')?.value;
       const method=methodOverride||window.selectedPay||'Efectivo';
-      try{
-        originalFinishSale.call(window,methodOverride,totalOverride,false);
-      }catch(e){
-        console.error('[VENTARA] finishSale',e);
-        notify('No se pudo registrar la venta. Revisa la consola para más detalles.');
-        return;
-      }
-      const d=dbRef();
-      const sale=(d?.sales||[]).find(s=>!before.has(s.id))||d?.sales?.[0];
-      if(!sale)return;
-      if(method==='Efectivo')sale.received=Number(cashReceived||sale.total||0);
-      else if(method==='Mixto')sale.received=Number(mixCash||0)+Number(mixOther||0);
-      else sale.received=Number(sale.total||0);
-      sale.change=Math.max(0,Number(sale.received||0)-Number(sale.total||0));
-      if(typeof window.save==='function')window.save();
-      setTimeout(()=>{try{window.offerTicket(sale.id)}catch(e){console.error('[VENTARA] offerTicket',e);notify('La venta se registró, pero no se pudo mostrar el ticket.')}},30);
+      try{originalFinishSale.call(window,methodOverride,totalOverride,false)}catch(e){console.error('[VENTARA] finishSale',e);notify('No se pudo registrar la venta. Revisa la consola para más detalles.');return}
+      const d=dbRef();const sale=(d?.sales||[]).find(s=>!before.has(s.id))||d?.sales?.[0];if(!sale)return;
+      if(method==='Efectivo')sale.received=Number(cashReceived||sale.total||0);else if(method==='Mixto')sale.received=Number(mixCash||0)+Number(mixOther||0);else sale.received=Number(sale.total||0);sale.change=Math.max(0,Number(sale.received||0)-Number(sale.total||0));if(typeof window.save==='function')window.save();setTimeout(()=>{try{window.offerTicket(sale.id)}catch(e){console.error('[VENTARA] offerTicket',e);notify('La venta se registró, pero no se pudo mostrar el ticket.')}},30);
     };
   }
+})();
+
+/* VENTARA POS - dynamic payment modal repair */
+(()=>{
+  const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const money=v=>{try{return typeof window.money==='function'?window.money(v):'$ '+Number(v||0).toLocaleString('es-CO')}catch(e){return '$ '+Number(v||0).toLocaleString('es-CO')}};
+  const db=()=>{try{return window.db||null}catch(e){return null}};
+  const notify=m=>{try{if(typeof window.toast==='function')window.toast(m);else alert(m)}catch(e){console.log('[VENTARA]',m)}};
+  const setGlobalLexical=(name,value)=>{try{Function('value',name+'=value')(value);return true}catch(e){try{window[name]=value;return true}catch(_){return false}}};
+  const originalOpen=window.openPaymentModalPOS;
+  const originalFinish=window.finishSale;
+  if(typeof originalOpen==='function'){
+    window.openPaymentModalPOS=function(){
+      try{originalOpen.call(window);setTimeout(injectPaymentFields,0)}catch(e){console.error('[VENTARA] payment modal',e);notify('No se pudo abrir el módulo de cobro.');}
+    };
+  }
+  function injectPaymentFields(){
+    const modal=document.getElementById('modalbox');
+    if(!modal)return;
+    const grid=modal.querySelector('.payment-grid');
+    const actions=modal.querySelector('.actions');
+    if(!grid||!actions)return;
+    let extra=modal.querySelector('#ventaraDynamicPaymentFields');
+    if(!extra){extra=document.createElement('div');extra.id='ventaraDynamicPaymentFields';extra.style.marginTop='15px';actions.parentNode.insertBefore(extra,actions)}
+    const total=Number((modal.querySelector('#cashReceived')||{}).value||0)||Number((document.querySelector('.checkout-total strong')?.textContent||'').replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.'))||0;
+    const current=window.__ventaraPaymentMethod||'Efectivo';
+    renderPaymentFields(current,total);
+    grid.querySelectorAll('button').forEach(btn=>{
+      if(btn.dataset.ventaraBound==='1')return;btn.dataset.ventaraBound='1';btn.addEventListener('click',()=>{const m=String(btn.id||'').replace(/^pm-/,'');window.__ventaraPaymentMethod=m;setGlobalLexical('selectedPay',m);setTimeout(()=>renderPaymentFields(m,total),0)})
+    });
+    const confirm=actions.querySelector('button.success');
+    if(confirm&&!confirm.dataset.ventaraBound){confirm.dataset.ventaraBound='1';confirm.onclick=function(e){e.preventDefault();e.stopPropagation();return window.confirmPayment(total)}}
+    updateConfirmButton(total);
+  }
+  function renderPaymentFields(method,total){
+    const extra=document.getElementById('ventaraDynamicPaymentFields');if(!extra)return;
+    const d=db();const clients=(d?.clients||[]).filter(c=>c&&c.id&&c.id!=='c1');
+    let html='';
+    if(method==='Efectivo')html=`<div class="field"><label>EFECTIVO RECIBIDO</label><input id="cashReceived" type="number" min="0" step="0.01" value="${esc(total)}"><div class="totalline" style="font-size:18px;margin-top:10px"><span>Cambio</span><b id="cashChange">${money(0)}</b></div></div>`;
+    else if(method==='Tarjeta')html=`<div class="form"><div class="field"><label>TIPO DE TARJETA *</label><select id="cardType"><option value="">Selecciona...</option><option value="Débito">Débito</option><option value="Crédito">Crédito</option></select></div><div class="field"><label>FRANQUICIA</label><select id="cardBrand"><option value="Visa">Visa</option><option value="Mastercard">Mastercard</option><option value="Otra">Otra</option></select></div></div>`;
+    else if(method==='Transferencia')html=`<div class="field"><label>BANCO / BILLETERA *</label><select id="transferProvider"><option value="">Selecciona...</option><option value="Nequi">Nequi</option><option value="Daviplata">Daviplata</option><option value="Bancolombia">Bancolombia</option><option value="Otros">Otros</option></select></div>`;
+    else if(method==='Mixto')html=`<div class="form"><div class="field"><label>MONTO EN EFECTIVO *</label><input id="mixCash" type="number" min="0" step="0.01" value="0"></div><div class="field"><label>MONTO TARJETA / TRANSFERENCIA *</label><input id="mixOther" type="number" min="0" step="0.01" value="${esc(total)}"></div></div><p id="mixStatus" class="muted">La suma debe ser exactamente ${money(total)}.</p>`;
+    else if(method==='Crédito')html=`<div class="field"><label>CLIENTE PARA CRÉDITO *</label><select id="creditClient"><option value="">Selecciona un cliente...</option>${clients.map(c=>`<option value="${esc(c.id)}">${esc(c.name||'Cliente')} · ${esc(c.doc||c.nit||'Sin documento')}</option>`).join('')}</select></div>`;
+    extra.innerHTML=html;
+    const cash=extra.querySelector('#cashReceived');if(cash)cash.addEventListener('input',()=>{const r=Number(cash.value||0);const ch=extra.querySelector('#cashChange');if(ch)ch.textContent=money(Math.max(0,r-total));updateConfirmButton(total)});
+    ['cardType','transferProvider','creditClient'].forEach(id=>extra.querySelector('#'+id)?.addEventListener('change',()=>updateConfirmButton(total)));
+    ['mixCash','mixOther'].forEach(id=>extra.querySelector('#'+id)?.addEventListener('input',()=>{const a=Number(extra.querySelector('#mixCash')?.value||0),b=Number(extra.querySelector('#mixOther')?.value||0),diff=a+b-total;const st=extra.querySelector('#mixStatus');if(st)st.textContent=Math.abs(diff)<0.005?'Pago completo · $ 0 de diferencia':diff>0?'Excede por '+money(diff):'Faltan '+money(Math.abs(diff));updateConfirmButton(total)}));
+    updateConfirmButton(total);
+  }
+  function updateConfirmButton(total){
+    const b=document.querySelector('#modalbox .actions button.success');if(!b)return;const m=window.__ventaraPaymentMethod||'Efectivo';let ok=true;
+    if(m==='Efectivo')ok=Number(document.getElementById('cashReceived')?.value||0)>=total;
+    if(m==='Tarjeta')ok=!!document.getElementById('cardType')?.value;
+    if(m==='Transferencia')ok=!!document.getElementById('transferProvider')?.value;
+    if(m==='Mixto')ok=Math.abs(Number(document.getElementById('mixCash')?.value||0)+Number(document.getElementById('mixOther')?.value||0)-total)<0.005;
+    if(m==='Crédito')ok=!!document.getElementById('creditClient')?.value;
+    b.disabled=!ok;b.style.opacity=ok?'1':'.55';b.title=ok?'':'Completa los datos obligatorios del método de pago';
+  }
+  window.confirmPayment=function(total){
+    const m=window.__ventaraPaymentMethod||'Efectivo';const amount=Number(total||0);let meta={method:m};
+    if(m==='Efectivo'){const received=Number(document.getElementById('cashReceived')?.value||0);if(received<amount)return notify('El efectivo recibido es menor al total.');meta.received=received;meta.change=received-amount}
+    else if(m==='Tarjeta'){const type=document.getElementById('cardType')?.value;if(!type)return notify('Selecciona Débito o Crédito.');meta.cardType=type;meta.cardBrand=document.getElementById('cardBrand')?.value||'';meta.received=amount;meta.change=0}
+    else if(m==='Transferencia'){const provider=document.getElementById('transferProvider')?.value;if(!provider)return notify('Selecciona el banco o billetera.');meta.transferProvider=provider;meta.received=amount;meta.change=0}
+    else if(m==='Mixto'){const cash=Number(document.getElementById('mixCash')?.value||0),other=Number(document.getElementById('mixOther')?.value||0);if(Math.abs(cash+other-amount)>=0.005)return notify('En pago mixto, efectivo + tarjeta/transferencia debe ser exactamente igual al total.');meta.mixCash=cash;meta.mixOther=other;meta.received=amount;meta.change=0}
+    else if(m==='Crédito'){const clientId=document.getElementById('creditClient')?.value;if(!clientId)return notify('Selecciona un cliente para vender a crédito.');setGlobalLexical('posClient',clientId);meta.creditClientId=clientId;meta.received=amount;meta.change=0}
+    window.__ventaraPaymentMeta=meta;setGlobalLexical('selectedPay',m);if(typeof originalFinish==='function')return originalFinish.call(window,m,amount,true);return false;
+  };
+  const originalFinishWrapper=window.finishSale;
+  if(typeof originalFinishWrapper==='function'){
+    window.finishSale=function(methodOverride,totalOverride,autoPrint=false){
+      const meta=window.__ventaraPaymentMeta||{};const result=originalFinishWrapper.call(window,methodOverride,totalOverride,autoPrint);setTimeout(()=>{const d=db(),s=d?.sales?.[0];if(s&&meta.method){s.paymentDetails={...meta};if(meta.creditClientId)s.clientId=meta.creditClientId;if(typeof window.save==='function')window.save()}window.__ventaraPaymentMeta=null},80);return result;
+    };
+  }
+  const observer=new MutationObserver(()=>{if(document.getElementById('modalbox')?.querySelector('.payment-grid'))injectPaymentFields()});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>observer.observe(document.body,{subtree:true,childList:true}),{once:true});else observer.observe(document.body,{subtree:true,childList:true});
 })();
