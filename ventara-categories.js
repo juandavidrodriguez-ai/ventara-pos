@@ -59,3 +59,29 @@ document.addEventListener('keydown',function(e){
     if(last)window.printTicket(last.id,true); else toast('No hay una venta reciente para imprimir');
   }
 });
+
+/* VENTARA POS - Confirmación de venta: imprimir automáticamente y mostrar el ticket */
+(()=>{
+  const originalFinishSale=window.finishSale;
+  if(typeof originalFinishSale!=='function')return;
+  window.finishSale=function(methodOverride,totalOverride,autoPrint=false){
+    const originalPrintTicket=window.printTicket;
+    let saleId=null;
+    try{
+      /* finishSale() es invocada directamente por el clic del usuario. Al forzar
+         autoPrint aquí, window.open() ocurre dentro del gesto y el navegador no
+         debería bloquear la ventana de impresión como popup. */
+      window.printTicket=function(id){
+        saleId=id;
+        return originalPrintTicket(id,true);
+      };
+      const result=originalFinishSale(methodOverride,totalOverride,true);
+      saleId=saleId||db?.sales?.[0]?.id||null;
+      if(saleId)setTimeout(()=>window.offerTicket(saleId),300);
+      return result;
+    }finally{
+      window.printTicket=originalPrintTicket;
+    }
+  };
+})();
+/* auto-ticket-flow-ready-1 */
