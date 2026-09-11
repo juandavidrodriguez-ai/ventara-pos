@@ -1,5 +1,14 @@
 /* VENTARA POS - Gestión de categorías de artículos */
 (()=>{
+  /* Registro de actividad: el módulo principal usa log() al cerrar una venta y en otras operaciones. */
+  window.log=window.log||function(action,detail=''){
+    try{
+      if(!window.db)return;
+      db.activityLog=Array.isArray(db.activityLog)?db.activityLog:[];
+      db.activityLog.unshift({id:typeof uid==='function'?uid('a'):'a_'+Date.now(),date:new Date().toISOString(),action:String(action||''),detail:String(detail||''),user:window.currentUser?.name||'Administrador'});
+      if(db.activityLog.length>500)db.activityLog.length=500;
+    }catch(e){console.warn('No se pudo registrar actividad',e)}
+  };
   function ensureCategories(){
     db.categories=Array.isArray(db.categories)?db.categories:[];
     const existing=new Set(db.categories.map(x=>String(x).trim()).filter(Boolean));
