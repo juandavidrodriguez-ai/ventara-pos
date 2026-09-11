@@ -1,3 +1,9 @@
+/* VENTARA POS - Compatibilidad global */
+(()=>{
+  if(typeof window.toast!=='function')window.toast=function(message){const text=String(message??'');try{let el=document.getElementById('ventara-toast');if(!el){el=document.createElement('div');el.id='ventara-toast';el.style.cssText='position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:99999;padding:12px 18px;border-radius:10px;background:#111827;color:#fff;font:600 14px Arial,sans-serif;box-shadow:0 8px 25px rgba(0,0,0,.22);max-width:min(90vw,520px);text-align:center;pointer-events:none';document.body.appendChild(el)}el.textContent=text;el.style.display='block';clearTimeout(el._ventaraToastTimer);el._ventaraToastTimer=setTimeout(()=>{el.style.display='none'},2800)}catch(e){console.log('[VENTARA]',text)}};
+  if(typeof window.log!=='function')window.log=function(action,detail=''){try{const d=window.db;if(!d){console.log('[VENTARA]',action,detail);return}d.activityLog=Array.isArray(d.activityLog)?d.activityLog:[];d.activityLog.unshift({id:typeof window.uid==='function'?window.uid('a'):'a_'+Date.now(),date:new Date().toISOString(),action:String(action||''),detail:String(detail||''),user:window.currentUser?.name||'Administrador'});if(d.activityLog.length>500)d.activityLog.length=500}catch(e){console.warn('[VENTARA] log',e)}};
+})();
+
 /* VENTARA POS - Gestión de categorías de artículos */
 (()=>{
   function getDb(){return window.db||null}
