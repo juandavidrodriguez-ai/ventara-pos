@@ -45,7 +45,7 @@
   function ticketHtml(s){
     const logo=db.settings.logo||VENTARA_LOGO;
     const rows=(s.items||[]).map(i=>`<div class="r"><span>${esc(i.qty)} x ${esc(i.name)}</span><span>${money(i.qty*i.price)}</span></div>`).join('');
-    return `<html><head><meta charset="utf-8"><title>${esc(s.number)}</title><style>@page{size:80mm auto;margin:0}html,body{margin:0;padding:0;background:#fff}body{font-family:'Courier New',monospace;font-size:12px;color:#000}.toolbar{position:sticky;top:0;background:#eef2f7;padding:10px;text-align:center;font-family:Arial,sans-serif;display:flex;gap:8px;justify-content:center}.toolbar button{padding:9px 13px;border:0;border-radius:7px;font-weight:700;cursor:pointer}.toolbar .primary{background:#009fe3;color:#fff}.ticket80{width:80mm;box-sizing:border-box;padding:3mm;margin:0 auto}.c{text-align:center}.r{display:flex;justify-content:space-between;gap:5px}.r span:first-child{max-width:55mm;word-break:break-word}.hr{border-top:1px dashed #000;margin:6px 0}img{max-width:48mm;max-height:22mm;object-fit:contain}h2{font-size:17px;margin:4px 0}@media print{.toolbar{display:none!important}body{width:80mm}.ticket80{margin:0}}</style></head><body><div class="toolbar"><button class="primary" onclick="doPrint()">🖨 Imprimir ticket</button><button onclick="window.close()">Cerrar</button></div><div class="ticket80"><div class="c"><img src="${logo}"><h2>${esc(db.settings.business||'VENTARA POS')}</h2><div>${esc(db.settings.nit||'')}</div><div>${esc(db.settings.city||'')}</div><div>${esc(db.settings.phone||'')}</div></div><div class="hr"></div><div><b>FACTURA POS ${esc(s.number)}</b><br>${esc(s.date)} ${esc(s.time)}<br>Cliente: ${esc(clientName(s.clientId))}</div><div class="hr"></div>${rows}<div class="hr"></div><div class="r"><b>TOTAL</b><b>${money(s.total)}</b></div><div class="r"><span>Medio de pago</span><span>${esc(s.method)}</span></div>${s.method==='Crédito'?`<div class="r"><span>Plazo</span><span>${db.clients.find(c=>c.id===s.clientId)?.creditDays||0} días</span></div>`:''}<div class="hr"></div><div class="c">Gracias por su compra<br>VENTARA POS</div></div><script>window.doPrint=function(){window.focus();window.print()}</script></body></html>`;
+    return `<html><head><meta charset="utf-8"><title>${esc(s.number)}</title><style>@page{size:80mm auto;margin:0}html,body{margin:0;padding:0;background:#fff}body{font-family:'Courier New',monospace;font-size:12px;color:#000}.toolbar{position:sticky;top:0;background:#eef2f7;padding:10px;text-align:center;font-family:Arial,sans-serif;display:flex;gap:8px;justify-content:center}.toolbar button{padding:9px 13px;border:0;border-radius:7px;font-weight:700;cursor:pointer}.toolbar .primary{background:#009fe3;color:#fff}.ticket80{width:80mm;box-sizing:border-box;padding:3mm;margin:0 auto}.c{text-align:center}.r{display:flex;justify-content:space-between;gap:5px}.r span:first-child{max-width:55mm;word-break:break-word}.hr{border-top:1px dashed #000;margin:6px 0}img{max-width:48mm;max-height:22mm;object-fit:contain}h2{font-size:17px;margin:4px 0}@media print{.toolbar{display:none!important}body{width:80mm}.ticket80{margin:0}}</style></head><body><div class="toolbar"><button class="primary" onclick="doPrint()">🖨 Imprimir ticket</button><button onclick="window.close()">Cerrar</button></div><div class="ticket80"><div class="c"><img src="${logo}"><h2>${esc(db.settings.business||'VENTARA POS')}</h2><div>${esc(db.settings.nit||'')}</div><div>${esc(db.settings.city||'')}</div><div>${esc(db.settings.phone||'')}</div></div><div class="hr"></div><div><b>FACTURA POS ${esc(s.number)}</b><br>${esc(s.date)} ${esc(s.time)}<br>Cliente: ${esc(clientName(s.clientId))}</div><div class="hr"></div>${rows}<div class="hr"></div><div class="r"><b>TOTAL</b><b>${money(s.total)}</b></div><div class="r"><span>Medio de pago</span><span>${esc(s.method)}</span></div>${s.method==='Crédito'?`<div class="r"><span>Plazo</span><span>${db.clients.find(c=>c.id===s.clientId)?.creditDays||0} días</span>`:''}<div class="hr"></div><div class="c">Gracias por su compra<br>VENTARA POS</div></div><script>window.doPrint=function(){window.focus();window.print()}</script></body></html>`;
   }
   function writeTicket(w,s,autoPrint=true){
     if(!w||w.closed||!s)return false;
@@ -54,83 +54,58 @@
       w.document.write(ticketHtml(s));
       w.document.close();
       w.focus();
-      if(autoPrint){
-        setTimeout(()=>{try{if(!w.closed){w.focus();w.print()}}catch(e){console.warn('No se pudo abrir impresión',e)}},500);
-      }
+      if(autoPrint){setTimeout(()=>{try{if(!w.closed){w.focus();w.print()}}catch(e){console.warn('No se pudo abrir impresión',e)}},500)}
       return true;
     }catch(e){console.warn('No se pudo preparar el ticket',e);return false}
   }
-  function clearPending(){
-    if(pendingTimer)clearInterval(pendingTimer);
-    pendingTimer=null;
-    pendingStartedAt=0;
-  }
+  function clearPending(){if(pendingTimer)clearInterval(pendingTimer);pendingTimer=null;pendingStartedAt=0}
   function finishPendingWithLatestSale(){
     if(!pendingTicketWindow||pendingTicketWindow.closed)return false;
-    const sales=window.db?.sales;
-    if(!Array.isArray(sales)||!sales.length)return false;
-    const sale=sales[0];
-    if(sales.length<=pendingSalesCount && Date.now()-pendingStartedAt<3000)return false;
-    clearPending();
-    const w=pendingTicketWindow;
-    pendingTicketWindow=null;
-    if(!writeTicket(w,sale,true)){try{w.close()}catch(e){}}
-    return true;
+    const sales=window.db?.sales;if(!Array.isArray(sales)||!sales.length)return false;
+    const sale=sales[0];if(sales.length<=pendingSalesCount&&Date.now()-pendingStartedAt<3000)return false;
+    clearPending();const w=pendingTicketWindow;pendingTicketWindow=null;
+    if(!writeTicket(w,sale,true)){try{w.close()}catch(e){}}return true;
   }
   function beginPendingTicket(){
     if(!window.db)return;
     if(pendingTicketWindow&&!pendingTicketWindow.closed)return;
-    pendingSalesCount=Array.isArray(window.db.sales)?window.db.sales.length:0;
-    pendingStartedAt=Date.now();
-    pendingTicketWindow=window.open('about:blank','_blank','width=460,height=850');
-    if(!pendingTicketWindow)return;
-    try{
-      pendingTicketWindow.document.write('<html><head><title>VENTARA POS</title></head><body style="font-family:Arial,sans-serif;padding:30px;text-align:center"><h3>Preparando ticket...</h3><p>La venta se está registrando.</p></body></html>');
-      pendingTicketWindow.document.close();
-    }catch(e){}
-    pendingTimer=setInterval(()=>{
-      if(!pendingTicketWindow||pendingTicketWindow.closed){clearPending();pendingTicketWindow=null;return}
-      if(finishPendingWithLatestSale())return;
-      if(Date.now()-pendingStartedAt>15000){clearPending();try{pendingTicketWindow.close()}catch(e){}pendingTicketWindow=null}
-    },100);
+    pendingSalesCount=Array.isArray(window.db.sales)?window.db.sales.length:0;pendingStartedAt=Date.now();
+    pendingTicketWindow=window.open('about:blank','_blank','width=460,height=850');if(!pendingTicketWindow)return;
+    try{pendingTicketWindow.document.write('<html><head><title>VENTARA POS</title></head><body style="font-family:Arial,sans-serif;padding:30px;text-align:center"><h3>Preparando ticket...</h3><p>La venta se está registrando.</p></body></html>');pendingTicketWindow.document.close()}catch(e){}
+    pendingTimer=setInterval(()=>{if(!pendingTicketWindow||pendingTicketWindow.closed){clearPending();pendingTicketWindow=null;return}if(finishPendingWithLatestSale())return;if(Date.now()-pendingStartedAt>15000){clearPending();try{pendingTicketWindow.close()}catch(e){}pendingTicketWindow=null}},100)
   }
-  function isConfirmButton(el){
-    if(!el||el.tagName!=='BUTTON')return false;
-    const text=(el.innerText||el.textContent||'').replace(/\s+/g,' ').trim().toUpperCase();
-    return text.includes('CONFIRMAR')&&text.includes('REGISTRAR')&&text.includes('VENTA');
-  }
-  document.addEventListener('click',function(e){
-    const b=e.target?.closest?.('button');
-    if(isConfirmButton(b))beginPendingTicket();
-  },true);
-
+  function isConfirmButton(el){if(!el||el.tagName!=='BUTTON')return false;const text=(el.innerText||el.textContent||'').replace(/\s+/g,' ').trim().toUpperCase();return text.includes('CONFIRMAR')&&text.includes('REGISTRAR')&&text.includes('VENTA')}
+  document.addEventListener('click',function(e){const b=e.target?.closest?.('button');if(isConfirmButton(b))beginPendingTicket()},true);
   window.offerTicket=function(id){
-    if(!window.db)return;
-    const s=db.sales.find(x=>x.id===id);if(!s)return;
-    if(pendingTicketWindow&&!pendingTicketWindow.closed){
-      const w=pendingTicketWindow;
-      pendingTicketWindow=null;
-      clearPending();
-      if(writeTicket(w,s,true))return;
-      try{w.close()}catch(e){}
-    }
-    openModal(`<h2>✓ Venta registrada</h2><p>La venta se registró correctamente.</p><div class="ticket-preview"><b>${esc(s.number)}</b><br>Total: ${money(s.total)}<br>Pago: ${esc(s.method)}</div><div class="actions" style="margin-top:15px"><button class="btn" onclick="closeModal()">Cerrar</button><button class="btn" onclick="printTicket('${id}',false)">👁 Ver ticket POS</button><button class="btn primary" onclick="printTicket('${id}',true)">🖨 Imprimir ahora</button></div>`);
+    if(!window.db)return;const s=db.sales.find(x=>x.id===id);if(!s)return;
+    if(pendingTicketWindow&&!pendingTicketWindow.closed){const w=pendingTicketWindow;pendingTicketWindow=null;clearPending();if(writeTicket(w,s,true))return;try{w.close()}catch(e){}}
+    openModal(`<h2>✓ Venta registrada</h2><p>La venta se registró correctamente.</p><div class="ticket-preview"><b>${esc(s.number)}</b><br>Total: ${money(s.total)}<br>Pago: ${esc(s.method)}</div><div class="actions" style="margin-top:15px"><button class="btn" onclick="closeModal()">Cerrar</button><button class="btn" onclick="printTicket('${id}',false)">👁 Ver ticket POS</button><button class="btn primary" onclick="printTicket('${id}',true)">🖨 Imprimir ahora</button></div>`)
   };
-  window.printTicket=function(id,autoPrint=false){
-    if(!window.db)return;
-    const s=db.sales.find(x=>x.id===id);if(!s)return;
-    const w=window.open('','_blank','width=460,height=850');
-    if(!w)return toast('El navegador bloqueó la ventana del ticket. Permite ventanas emergentes para VENTARA POS.');
-    writeTicket(w,s,autoPrint);
-  };
+  window.printTicket=function(id,autoPrint=false){if(!window.db)return;const s=db.sales.find(x=>x.id===id);if(!s)return;const w=window.open('','_blank','width=460,height=850');if(!w)return toast('El navegador bloqueó la ventana del ticket. Permite ventanas emergentes para VENTARA POS.');writeTicket(w,s,autoPrint)};
 })();
 
-/* Atajo seguro: Ctrl+Shift+P */
-document.addEventListener('keydown',function(e){
-  if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='p'){
-    e.preventDefault();
-    const last=window.db?.sales?.[0];
-    if(last)window.printTicket(last.id,true); else toast('No hay una venta reciente para imprimir');
-  }
-});
+document.addEventListener('keydown',function(e){if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='p'){e.preventDefault();const last=window.db?.sales?.[0];if(last)window.printTicket(last.id,true);else toast('No hay una venta reciente para imprimir')}});
 /* auto-ticket-flow-ready-5 */
+
+/* VENTARA POS - Fallback robusto para la ventana de ticket */
+(()=>{
+  let w=null, started=0, count=0, timer=null;
+  function getDb(){try{return db}catch(e){return window.db||null}}
+  function isConfirm(b){if(!b||b.tagName!=='BUTTON')return false;const t=(b.innerText||b.textContent||'').replace(/\s+/g,' ').trim().toUpperCase();return t.includes('CONFIRMAR')&&t.includes('REGISTRAR')&&t.includes('VENTA')}
+  function simpleTicket(s){
+    const d=getDb();if(!d)return '<html><body><h3>Preparando ticket...</h3><p>La venta se está registrando.</p></body></html>';
+    const items=(s.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px"><span>${String(i.qty)} x ${String(i.name||'')}</span><span>${typeof money==='function'?money(i.qty*i.price):'$ '+(i.qty*i.price).toLocaleString('es-CO')}</span></div>`).join('');
+    const client=typeof clientName==='function'?clientName(s.clientId):(d.clients||[]).find(c=>c.id===s.clientId)?.name||'Consumidor final';
+    return `<html><head><meta charset="utf-8"><title>${String(s.number||'Ticket POS')}</title><style>@page{size:80mm auto;margin:0}body{width:80mm;margin:0;padding:4mm;box-sizing:border-box;font:12px 'Courier New',monospace;color:#000}.c{text-align:center}.line{border-top:1px dashed #000;margin:7px 0}.items{display:flex;flex-direction:column;gap:3px}</style></head><body><div class="c"><b>${String(d.settings?.business||'VENTARA POS')}</b><br>${String(d.settings?.nit||'')}<br>${String(s.date||'')} ${String(s.time||'')}</div><div class="line"></div><b>FACTURA POS ${String(s.number||'')}</b><br>Cliente: ${String(client)}<div class="line"></div><div class="items">${items}</div><div class="line"></div><div style="display:flex;justify-content:space-between"><b>TOTAL</b><b>${typeof money==='function'?money(s.total):'$ '+Number(s.total||0).toLocaleString('es-CO')}</b></div><div style="display:flex;justify-content:space-between"><span>Pago</span><span>${String(s.method||'')}</span></div><div class="line"></div><div class="c">Gracias por su compra</div><script>window.onload=function(){setTimeout(function(){window.focus();window.print()},400)}</script></body></html>`
+  }
+  function finalize(){const d=getDb();if(!w||w.closed||!d)return false;const sales=d.sales;if(!Array.isArray(sales)||!sales.length)return false;if(sales.length<=count&&Date.now()-started<2500)return false;const s=sales[0];clearInterval(timer);timer=null;try{w.document.open();w.document.write(simpleTicket(s));w.document.close();w.focus()}catch(e){console.warn(e)}return true}
+  document.addEventListener('click',e=>{
+    const b=e.target?.closest?.('button');if(!isConfirm(b))return;
+    clearInterval(timer);timer=null;const d=getDb();count=Array.isArray(d?.sales)?d.sales.length:0;started=Date.now();
+    try{w=window.open('about:blank','_blank','width=460,height=850')}catch(e){w=null}
+    if(!w){console.warn('VENTARA: el navegador bloqueó la ventana del ticket');return}
+    try{w.document.write('<html><head><title>VENTARA POS</title></head><body style="font-family:Arial,sans-serif;padding:30px;text-align:center"><h3>Preparando ticket...</h3><p>La venta se está registrando.</p></body></html>');w.document.close()}catch(e){}
+    timer=setInterval(()=>{if(w?.closed){clearInterval(timer);timer=null;return}if(finalize())return;if(Date.now()-started>20000){clearInterval(timer);timer=null}},100)
+  },true);
+})();
+/* ticket-fallback-ready-1 */
