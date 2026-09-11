@@ -3,136 +3,28 @@
   const getDb=()=>{try{return typeof db!=='undefined'?db:(window.db||null)}catch(e){return window.db||null}};
   const notify=(message)=>{try{if(typeof window.toast==='function')window.toast(message);else alert(message)}catch(e){console.log('[VENTARA]',message)}};
   const escapeHtml=(value)=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-
-  function ensureCategories(){
-    const d=getDb();
-    if(!d)return false;
-    d.categories=Array.isArray(d.categories)?d.categories:[];
-    const names=new Set(d.categories.map(c=>String(c||'').trim()).filter(Boolean));
-    (d.products||[]).forEach(p=>{const name=String(p.category||'').trim();if(name)names.add(name)});
-    if(!names.size)names.add('General');
-    d.categories=[...names];
-    return true;
-  }
-
-  function categoryOptions(selected=''){
-    const d=getDb();
-    if(!d)return '<option value="General">General</option>';
-    ensureCategories();
-    return (d.categories||['General']).map(c=>`<option value="${escapeHtml(c)}" ${String(c)===String(selected)?'selected':''}>${escapeHtml(c)}</option>`).join('');
-  }
-
-  function refreshProductCategory(selected){
-    const d=getDb(),field=document.getElementById('f_cat');
-    if(!d||!field)return;
-    ensureCategories();
-    const current=selected??field.value??'General';
-    if(field.tagName!=='SELECT'){
-      const select=document.createElement('select');
-      select.id='f_cat';
-      select.name='category';
-      select.className=field.className||'';
-      select.style.cssText=field.style.cssText||'';
-      field.replaceWith(select);
-      field=select;
-    }
-    const signature=(d.categories||[]).join('\u0001');
-    if(field.dataset.categorySignature!==signature){
-      field.innerHTML=categoryOptions(current);
-      field.dataset.categorySignature=signature;
-    }
-    if((d.categories||[]).includes(current))field.value=current;
-  }
-
-  function addCategoryButtonToProductModal(){
-    const field=document.getElementById('f_cat');
-    if(!field)return;
-    refreshProductCategory(field.value||'General');
-    const select=document.getElementById('f_cat');
-    if(!select||document.getElementById('ventaraCategoryQuickAdd'))return;
-    const host=select.closest('.field');
-    if(!host)return;
-    const button=document.createElement('button');
-    button.id='ventaraCategoryQuickAdd';
-    button.type='button';
-    button.className='btn sm';
-    button.style.cssText='margin-top:7px;width:max-content';
-    button.textContent='📂 Nueva categoría';
-    button.onclick=()=>window.openCategoriesModal();
-    host.appendChild(button);
-  }
-
-  function removeCategoryAccessOutsideArticles(){
-    document.querySelectorAll('.nav, button').forEach(button=>{
-      const text=(button.innerText||button.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-      if(!text.includes('categor'))return;
-      const isArticleArea=button.closest('#products,[data-page="products"],#modalbox #f_cat');
-      const isProductModal=!!button.closest('#modalbox')&&!!document.getElementById('f_cat');
-      if(isArticleArea||isProductModal)return;
-      if(button.closest('#pos,[data-page="pos"]')||button.classList.contains('nav'))button.remove();
-    });
-  }
-
-  window.openCategoriesModal=function(){
-    if(!ensureCategories())return notify('Los datos todavía no están listos.');
-    if(typeof window.openModal!=='function')return notify('No se pudo abrir Categorías.');
-    renderCategoriesModal();
-  };
-
-  function renderCategoriesModal(message=''){
-    const d=getDb();
-    if(!d||typeof window.openModal!=='function')return;
-    ensureCategories();
-    const rows=(d.categories||[]).map((name,index)=>{
-      const used=(d.products||[]).filter(p=>String(p.category||'').trim()===name).length;
-      return `<tr><td><b>${escapeHtml(name)}</b></td><td>${used}</td><td><button class="btn sm danger" type="button" onclick="window.deleteCategory(${index})" ${used?'disabled title="Hay artículos usando esta categoría"':''}>Eliminar</button></td></tr>`;
-    }).join('');
-    const tableHtml=typeof window.table==='function'?window.table(['Categoría','Artículos','Acción'],rows,'Aún no hay categorías'):`<table class="table"><thead><tr><th>Categoría</th><th>Artículos</th><th>Acción</th></tr></thead><tbody>${rows||'<tr><td colspan="3" class="empty">Aún no hay categorías</td></tr>'}</tbody></table>`;
-    window.openModal(`<h2>📂 Categorías</h2><p class="muted">Administra las categorías que aparecen en Artículos.</p><form id="ventaraCategoryForm"><div class="form" style="margin-bottom:15px"><div class="field"><label>Nueva categoría</label><input id="newCategoryName" type="text" maxlength="60" placeholder="Ej. Abarrotes" autocomplete="off"></div><div class="field" style="align-self:end"><button class="btn primary" type="submit">+ Crear categoría</button></div></div></form>${message?`<div class="badge green" style="margin-bottom:12px">${escapeHtml(message)}</div>`:''}<div class="card" style="box-shadow:none;background:#f8fafc">${tableHtml}</div><div class="actions" style="margin-top:15px"><button class="btn" type="button" onclick="window.closeModal()">Cerrar</button></div>`);
-    document.getElementById('ventaraCategoryForm')?.addEventListener('submit',e=>{e.preventDefault();window.createCategory()});
-    document.getElementById('newCategoryName')?.focus();
-  }
-
-  window.createCategory=async function(){
-    const d=getDb();
-    if(!d)return notify('Los datos todavía no están listos.');
-    ensureCategories();
-    const input=document.getElementById('newCategoryName');
-    const name=(input?.value||'').trim().replace(/\s+/g,' ');
-    if(!name)return notify('Escribe el nombre de la categoría.');
-    if(name.length>60)return notify('La categoría no puede superar 60 caracteres.');
-    if(d.categories.some(c=>String(c).toLowerCase()===name.toLowerCase()))return notify('Esa categoría ya existe.');
-    d.categories.push(name);
-    if(typeof window.save==='function')window.save();
-    try{if(typeof window.cloudSave==='function')await window.cloudSave()}catch(e){console.warn('[VENTARA] cloud category save',e)}
-    refreshProductCategory(name);
-    renderCategoriesModal('Categoría creada correctamente.');
-    addCategoryButtonToProductModal();
-  };
-
-  window.deleteCategory=function(index){
-    const d=getDb();
-    if(!d)return;
-    ensureCategories();
-    const name=d.categories[index];
-    if(!name)return;
-    const used=(d.products||[]).some(p=>String(p.category||'').trim()===name);
-    if(used)return notify('No puedes eliminar una categoría que tiene artículos asignados.');
-    if(!confirm(`¿Eliminar la categoría "${name}"?`))return;
-    d.categories.splice(index,1);
-    if(!d.categories.length)d.categories.push('General');
-    if(typeof window.save==='function')window.save();
-    refreshProductCategory();
-    renderCategoriesModal('Categoría eliminada.');
-  };
-
-  function observe(){
-    ensureCategories();
-    addCategoryButtonToProductModal();
-    removeCategoryAccessOutsideArticles();
-  }
-
+  function ensureCategories(){const d=getDb();if(!d)return false;d.categories=Array.isArray(d.categories)?d.categories:[];const names=new Set(d.categories.map(c=>String(c||'').trim()).filter(Boolean));(d.products||[]).forEach(p=>{const name=String(p.category||'').trim();if(name)names.add(name)});if(!names.size)names.add('General');d.categories=[...names];return true;}
+  function categoryOptions(selected=''){const d=getDb();if(!d)return '<option value="General">General</option>';ensureCategories();return (d.categories||['General']).map(c=>`<option value="${escapeHtml(c)}" ${String(c)===String(selected)?'selected':''}>${escapeHtml(c)}</option>`).join('');}
+  function refreshProductCategory(selected){const d=getDb(),field=document.getElementById('f_cat');if(!d||!field)return;ensureCategories();const current=selected??field.value??'General';if(field.tagName!=='SELECT'){const select=document.createElement('select');select.id='f_cat';select.name='category';select.className=field.className||'';select.style.cssText=field.style.cssText||'';field.replaceWith(select);field=select;}const signature=(d.categories||[]).join('\u0001');if(field.dataset.categorySignature!==signature){field.innerHTML=categoryOptions(current);field.dataset.categorySignature=signature;}if((d.categories||[]).includes(current))field.value=current;}
+  function addCategoryButtonToProductModal(){const field=document.getElementById('f_cat');if(!field)return;refreshProductCategory(field.value||'General');const select=document.getElementById('f_cat');if(!select||document.getElementById('ventaraCategoryQuickAdd'))return;const host=select.closest('.field');if(!host)return;const button=document.createElement('button');button.id='ventaraCategoryQuickAdd';button.type='button';button.className='btn sm';button.style.cssText='margin-top:7px;width:max-content';button.textContent='📂 Nueva categoría';button.onclick=()=>window.openCategoriesModal();host.appendChild(button);}
+  function removeCategoryAccessOutsideArticles(){document.querySelectorAll('.nav, button').forEach(button=>{const text=(button.innerText||button.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();if(!text.includes('categor'))return;const isArticleArea=button.closest('#products,[data-page="products"],#modalbox #f_cat');const isProductModal=!!button.closest('#modalbox')&&!!document.getElementById('f_cat');if(isArticleArea||isProductModal)return;if(button.closest('#pos,[data-page="pos"]')||button.classList.contains('nav'))button.remove();});}
+  window.openCategoriesModal=function(){if(!ensureCategories())return notify('Los datos todavía no están listos.');if(typeof window.openModal!=='function')return notify('No se pudo abrir Categorías.');renderCategoriesModal();};
+  function renderCategoriesModal(message=''){const d=getDb();if(!d||typeof window.openModal!=='function')return;ensureCategories();const rows=(d.categories||[]).map((name,index)=>{const used=(d.products||[]).filter(p=>String(p.category||'').trim()===name).length;return `<tr><td><b>${escapeHtml(name)}</b></td><td>${used}</td><td><button class="btn sm danger" type="button" onclick="window.deleteCategory(${index})" ${used?'disabled title="Hay artículos usando esta categoría"':''}>Eliminar</button></td></tr>`;}).join('');const tableHtml=typeof window.table==='function'?window.table(['Categoría','Artículos','Acción'],rows,'Aún no hay categorías'):`<table class="table"><thead><tr><th>Categoría</th><th>Artículos</th><th>Acción</th></tr></thead><tbody>${rows||'<tr><td colspan="3" class="empty">Aún no hay categorías</td></tr>'}</tbody></table>`;window.openModal(`<h2>📂 Categorías</h2><p class="muted">Administra las categorías que aparecen en Artículos.</p><form id="ventaraCategoryForm"><div class="form" style="margin-bottom:15px"><div class="field"><label>Nueva categoría</label><input id="newCategoryName" type="text" maxlength="60" placeholder="Ej. Abarrotes" autocomplete="off"></div><div class="field" style="align-self:end"><button class="btn primary" type="submit">+ Crear categoría</button></div></div></form>${message?`<div class="badge green" style="margin-bottom:12px">${escapeHtml(message)}</div>`:''}<div class="card" style="box-shadow:none;background:#f8fafc">${tableHtml}</div><div class="actions" style="margin-top:15px"><button class="btn" type="button" onclick="window.closeModal()">Cerrar</button></div>`);document.getElementById('ventaraCategoryForm')?.addEventListener('submit',e=>{e.preventDefault();window.createCategory()});document.getElementById('newCategoryName')?.focus();}
+  window.createCategory=async function(){const d=getDb();if(!d)return notify('Los datos todavía no están listos.');ensureCategories();const input=document.getElementById('newCategoryName');const name=(input?.value||'').trim().replace(/\s+/g,' ');if(!name)return notify('Escribe el nombre de la categoría.');if(name.length>60)return notify('La categoría no puede superar 60 caracteres.');if(d.categories.some(c=>String(c).toLowerCase()===name.toLowerCase()))return notify('Esa categoría ya existe.');d.categories.push(name);if(typeof window.save==='function')window.save();try{if(typeof window.cloudSave==='function')await window.cloudSave()}catch(e){console.warn('[VENTARA] cloud category save',e)}refreshProductCategory(name);renderCategoriesModal('Categoría creada correctamente.');addCategoryButtonToProductModal();};
+  window.deleteCategory=function(index){const d=getDb();if(!d)return;ensureCategories();const name=d.categories[index];if(!name)return;const used=(d.products||[]).some(p=>String(p.category||'').trim()===name);if(used)return notify('No puedes eliminar una categoría que tiene artículos asignados.');if(!confirm(`¿Eliminar la categoría "${name}"?`))return;d.categories.splice(index,1);if(!d.categories.length)d.categories.push('General');if(typeof window.save==='function')window.save();refreshProductCategory();renderCategoriesModal('Categoría eliminada.');};
+  function observe(){ensureCategories();addCategoryButtonToProductModal();removeCategoryAccessOutsideArticles();}
   const observer=new MutationObserver(()=>observe());
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{observe();observer.observe(document.body,{subtree:true,childList:true})},{once:true});
-  else{observe();observer.observe(document.body,{subtree:true,childList:true})}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{observe();observer.observe(document.body,{subtree:true,childList:true})},{once:true});else{observe();observer.observe(document.body,{subtree:true,childList:true})}
+})();
+
+/* VENTARA POS - Compatibilidad global y ticket POS */
+(()=>{
+  const safeText=v=>String(v??'');
+  if(typeof window.toast!=='function')window.toast=function(message){const text=safeText(message);try{let el=document.getElementById('ventara-toast');if(!el){el=document.createElement('div');el.id='ventara-toast';el.style.cssText='position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:99999;padding:12px 18px;border-radius:10px;background:#111827;color:#fff;font:600 14px Arial,sans-serif;box-shadow:0 8px 25px rgba(0,0,0,.22);max-width:min(90vw,520px);text-align:center;pointer-events:none';document.body.appendChild(el)}el.textContent=text;el.style.display='block';clearTimeout(el._ventaraToastTimer);el._ventaraToastTimer=setTimeout(()=>{el.style.display='none'},2800)}catch(e){console.log('[VENTARA]',text)}};
+  if(typeof window.log!=='function')window.log=function(action,detail=''){try{const d=window.db;if(!d){console.log('[VENTARA]',action,detail);return}d.activityLog=Array.isArray(d.activityLog)?d.activityLog:[];d.activityLog.unshift({id:typeof window.uid==='function'?window.uid('a'):'a_'+Date.now(),date:new Date().toISOString(),action:safeText(action),detail:safeText(detail),user:window.currentUser?.name||'Administrador'});if(d.activityLog.length>500)d.activityLog.length=500}catch(e){console.warn('[VENTARA] log',e)}};
+  const db=()=>{try{return window.db||null}catch(e){return null}};
+  const esc=v=>safeText(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const moneySafe=v=>{try{return typeof window.money==='function'?window.money(v):'$ '+Number(v||0).toLocaleString('es-CO')}catch(e){return '$ '+Number(v||0).toLocaleString('es-CO')}};
+  function ticketHtml(s){const d=db();if(!d||!s)return '<!doctype html><html><body><h3>Ticket no disponible</h3></body></html>';const st=d.settings||{},logo=st.logo||window.VENTARA_LOGO||'';const client=typeof window.clientName==='function'?window.clientName(s.clientId):((d.clients||[]).find(c=>c.id===s.clientId)?.name||'Consumidor final');const items=(s.items||[]).map(i=>`<div class="row"><span>${esc(i.qty)} x ${esc(i.name)}</span><span>${moneySafe(i.qty*i.price)}</span></div>`).join('');const subtotal=(s.items||[]).reduce((a,i)=>a+Number(i.qty||0)*Number(i.price||0),0);const iva=(s.items||[]).reduce((a,i)=>{const p=(d.products||[]).find(x=>x.id===i.id);const rate=Number(i.iva??p?.iva??p?.taxRate??0);if(!rate)return a;const gross=Number(i.qty||0)*Number(i.price||0);return a+(gross-gross/(1+rate/100))},0);const discount=Number(s.discount||0);const cashier=s.cashier||((d.users||[]).find(u=>u.id===s.userId)?.name||'');return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(s.number||'Ticket POS')}</title><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000}body{width:80mm;font-family:"Courier New",monospace;font-size:12px;line-height:1.25}.toolbar{position:sticky;top:0;z-index:5;background:#eef2f7;padding:9px;display:flex;gap:7px;justify-content:center;font-family:Arial,sans-serif}.toolbar button{border:0;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer}.toolbar .primary{background:#009fe3;color:#fff}.ticket{width:80mm;padding:3.5mm;margin:0 auto}.center{text-align:center}.logo{display:block;max-width:48mm;max-height:22mm;margin:0 auto 3mm;object-fit:contain}.business{font-size:16px;font-weight:900;margin:1mm 0}.legal{font-size:11px}.sep{border-top:1px dashed #000;margin:6px 0}.row{display:flex;justify-content:space-between;gap:5px;margin:2px 0}.row span:first-child{max-width:54mm;word-break:break-word}.total{font-size:15px;font-weight:900}.small{font-size:10px}@media print{.toolbar{display:none!important}body{width:80mm}.ticket{margin:0;padding:3mm}}</style></head><body><div class="toolbar"><button class="primary" onclick="window.focus();window.print()">🖨 Imprimir ticket</button><button onclick="window.close()">Cerrar</button></div><div class="ticket"><div class="center">${logo?`<img class="logo" src="${esc(logo)}" alt="Logo">`:''}<div class="business">${esc(st.business||'VENTARA POS')}</div>${st.legal?`<div class="legal">${esc(st.legal)}</div>`:''}${st.nit?`<div>NIT / ID: ${esc(st.nit)}</div>`:''}${st.type?`<div>${esc(st.type)}</div>`:''}${st.tax?`<div>${esc(st.tax)}</div>`:''}${st.city?`<div>${esc(st.city)}</div>`:''}${st.phone?`<div>Tel: ${esc(st.phone)}</div>`:''}${st.email?`<div>${esc(st.email)}</div>`:''}</div><div class="sep"></div><div><b>FACTURA POS ${esc(s.number||'')}</b><br>Fecha: ${esc(s.date||'')} ${esc(s.time||'')}<br>Cliente: ${esc(client)}${cashier?`<br>Cajero: ${esc(cashier)}`:''}</div><div class="sep"></div>${items||'<div>Sin productos</div>'}<div class="sep"></div><div class="row"><span>Subtotal</span><span>${moneySafe(subtotal)}</span></div>${discount>0?`<div class="row"><span>Descuento</span><span>${moneySafe(discount)}</span></div>`:''}${iva>0?`<div class="row"><span>IVA</span><span>${moneySafe(iva)}</span></div>`:''}<div class="row total"><span>TOTAL</span><span>${moneySafe(s.total)}</span></div><div class="row"><span>Medio de pago</span><span>${esc(s.method||'')}</span></div>${s.method==='Crédito'?`<div class="row"><span>Plazo</span><span>${esc((d.clients||[]).find(c=>c.id===s.clientId)?.creditDays||0)} días</span></div>`:''}<div class="sep"></div><div class="center">${esc(st.footer||'Gracias por su compra')}<br><b>${esc(st.business||'VENTARA POS')}</b><br><span class="small">Documento generado por VENTARA POS</span></div></div><script>window.addEventListener('load',function(){setTimeout(function(){try{window.focus();window.print()}catch(e){}},350)});<\/script></body></html>`;}
+  window.printTicket=function(id){const d=db(),s=d?.sales?.find(x=>x.id===id);if(!s)return;let w=null;try{w=window.open('about:blank','_blank','width=460,height=850')}catch(e){}if(!w){window.toast('El navegador bloqueó el ticket. Permite ventanas emergentes para VENTARA POS.');return;}try{w.document.open();w.document.write(ticketHtml(s));w.document.close();setTimeout(()=>{try{if(!w.closed){w.focus();w.print()}}catch(e){}},700)}catch(e){console.warn('[VENTARA] ticket',e);window.toast('No se pudo preparar el ticket');}};
 })();
