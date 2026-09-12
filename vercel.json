@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    {"source": "/ventara-categories.js", "destination": "/ventara-sale-safe.js"}
+  ],
   "headers": [
     {
       "source": "/(.*)",
