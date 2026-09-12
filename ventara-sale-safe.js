@@ -1,0 +1,1 @@
+(()=>{window.VENTARA_SAFE_SALE_LOADED=true;})();
