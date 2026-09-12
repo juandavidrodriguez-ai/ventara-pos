@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    {"source": "/ventara-categories.js", "destination": "/ventara-sale-safe.js"}
+    {"source": "/ventara-categories.js", "destination": "/ventara-sale-bridge.js"}
   ],
   "headers": [
     {
