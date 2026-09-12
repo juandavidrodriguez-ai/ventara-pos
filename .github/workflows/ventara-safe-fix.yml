@@ -1,0 +1,37 @@
+name: Ventara safe-sale one-time fix
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'apply safe-sale runtime globals')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch safe sale globals
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('ventara-sale-safe.js')
+          s=p.read_text()
+          s=s.replace("const getDb=()=>{try{return window.db||null}catch(e){return null}};", "const getDb=()=>{try{return typeof db!=='undefined'?db:null}catch(e){return null}};")
+          s=s.replace("const c=Array.isArray(window.cart)?window.cart:[];", "const c=typeof cart!=='undefined'&&Array.isArray(cart)?cart:[];")
+          s=s.replace("if(!d||!Array.isArray(window.cart)||!window.cart.length)", "if(!d||typeof cart==='undefined'||!Array.isArray(cart)||!cart.length)")
+          s=s.replace("window.posClient=id", "posClient=id")
+          p.write_text(s)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ventara-sale-safe.js
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: apply safe-sale runtime globals"
+          git push
+      - name: Remove one-time workflow
+        run: |
+          git rm .github/workflows/ventara-safe-fix.yml
+          git commit -m "chore: remove one-time safe-sale workflow"
+          git push
