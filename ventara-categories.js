@@ -136,3 +136,6 @@
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync,{once:true});else sync();
 })();
+
+// Carga aislada de los campos secundarios de pago, sin modificar la lógica de venta.
+(()=>{const s=document.createElement('script');s.src='ventara-payment-options.js';s.defer=false;document.head.appendChild(s)})();
