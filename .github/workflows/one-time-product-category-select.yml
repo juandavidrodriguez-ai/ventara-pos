@@ -1,0 +1,61 @@
+name: One-time product category selector patch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch product category field
+        id: patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+
+          old_field = '<label>Categoría</label><input id="f_cat" value="${p.category}">'
+          new_field = '''<label>Categoría</label><select id="productCategory">${[...(Array.isArray(db.categories)?db.categories:[]),...(Array.isArray(db.categoryList)?db.categoryList:[]),...db.products.map(x=>x.category)].map(c=>typeof c==='string'?c:(c?.name||c?.label||'')).map(x=>x.trim()).filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).concat(p.category&&![...(Array.isArray(db.categories)?db.categories:[]),...(Array.isArray(db.categoryList)?db.categoryList:[]),...db.products.map(x=>x.category)].map(c=>typeof c==='string'?c:(c?.name||c?.label||'')).map(x=>x.trim()).filter(Boolean).includes(p.category)?[p.category]:[]).map(c=>`<option value="${String(c).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" ${c===p.category?'selected':''}>${String(c).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}</option>`).join('')}</select>'''
+
+          old_save = "category:v('f_cat')"
+          new_save = "category:v('productCategory')"
+
+          if old_field not in text:
+              raise SystemExit('TARGET_NOT_FOUND_FIELD')
+          if old_save not in text:
+              raise SystemExit('TARGET_NOT_FOUND_SAVE')
+
+          text = text.replace(old_field, new_field, 1)
+          text = text.replace(old_save, new_save, 1)
+          path.write_text(text, encoding='utf-8')
+          print('CATEGORY_PATCH_APPLIED')
+          PY
+
+      - name: Validate patch
+        shell: bash
+        run: |
+          grep -q 'id="productCategory"' index.html
+          grep -q "category:v('productCategory')" index.html
+          echo 'CATEGORY_PATCH_VALIDATED'
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/one-time-product-category-select.yml
+          git add index.html .github/workflows/one-time-product-category-select.yml
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: replace product category input with selector'
+          git push origin main
