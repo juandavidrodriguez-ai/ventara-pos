@@ -1,0 +1,47 @@
+name: Apply payment modal patch
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[payment-modal-patched]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch payment modal
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          start=s.index('function openPaymentModalPOS()')
+          end=s.index('function finishSale', start)
+          old=s[start:end]
+          new=r'''function openPaymentModalPOS(){if(!cart.length)return toast('Agrega productos a la venta');let subtotal=cart.reduce((a,i)=>a+i.qty*i.price,0),discount=+(document.getElementById('posDiscount')?.value||0),total=Math.max(0,subtotal-discount);openModal(`<h2>💰 Cobrar VENTA</h2><p class="muted">Caja registradora · Total a cobrar</p><div style="text-align:center;background:#f4fbfd;padding:15px;border-radius:12px"><div class="muted">TOTAL</div><div style="font-size:38px;font-weight:900;color:#005f73">${money(total)}</div></div><h3>Forma de pago</h3><div class="payment-grid"><button id="pm-Efectivo" class="selected" onclick="selectPay('Efectivo')">💵 Efectivo</button><button id="pm-Tarjeta" onclick="selectPay('Tarjeta')">💳 Tarjeta</button><button id="pm-Transferencia" onclick="selectPay('Transferencia')">📲 Transferencia</button><button id="pm-Mixto" onclick="selectPay('Mixto')">🔀 Mixto</button><button id="pm-Crédito" onclick="selectPay('Crédito')">🧾 Crédito</button></div><div id="cashFields" style="margin-top:15px"><div class="field"><label>EFECTIVO RECIBIDO</label><input id="cashReceived" type="number" min="0" value="${total}" oninput="calcChange(${total})" onkeydown="if(event.key==='Enter')confirmPayment(${total})"></div><div class="totalline" style="font-size:18px;margin-top:10px"><span>Cambio</span><b id="cashChange">${money(0)}</b></div></div><div id="creditClientContainer" style="display:none;margin-top:15px"><label style="display:block;font-weight:bold;margin-bottom:5px">Seleccionar Cliente para Crédito:</label><select id="creditClientSelect" class="form-control" style="width:100%;padding:8px;border-radius:6px;border:1px solid #ccc"><option value="">-- Seleccione un cliente --</option></select><small class="muted" id="creditClientWarning" style="display:none">Selecciona un cliente para vender a crédito</small></div><div id="mixedFields" style="display:none;margin-top:15px"><div class="form"><div class="field"><label>Efectivo</label><input id="mixCash" type="number" value="0" oninput="calcMixed(${total})"></div><div class="field"><label>Tarjeta/Transferencia</label><input id="mixOther" type="number" value="${total}" oninput="calcMixed(${total})"></div></div><p id="mixStatus" class="muted"></p></div><div class="actions" style="margin-top:18px"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn success" style="padding:13px 22px" onclick="confirmPayment(${total})">✓ CONFIRMAR Y REGISTRAR VENTA</button></div>`);selectPay('Efectivo')}
+let selectedPay='Efectivo';function selectPay(method){selectedPay=method;document.querySelectorAll('.payment-grid button').forEach(b=>b.classList.remove('selected'));let payButton=document.getElementById('pm-'+method);if(payButton)payButton.classList.add('selected');let cashFields=document.getElementById('cashFields');if(cashFields)cashFields.style.display=method==='Crédito'?'none':'block';let mixedFields=document.getElementById('mixedFields');if(mixedFields)mixedFields.style.display=method==='Mixto'?'block':'none';let creditContainer=document.getElementById('creditClientContainer');if(creditContainer)creditContainer.style.display=method==='Crédito'?'block':'none';if(method==='Crédito'){let creditSelect=document.getElementById('creditClientSelect');if(creditSelect){let clients=Array.isArray(db?.clients)?db.clients.filter(c=>String(c?.name||'').trim().toLowerCase()!=='consumidor final'):[];creditSelect.innerHTML='<option value="">-- Seleccione un cliente --</option>'+clients.map(c=>'<option value="'+String(c.id??'').replace(/"/g,'&quot;')+'">'+String(c.name??'').replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]})+'</option>').join('');}let warning=document.getElementById('creditClientWarning');if(warning)warning.style.display='block'}}
+function calcChange(total){let r=+(document.getElementById('cashReceived')?.value||0);let change=document.getElementById('cashChange');if(change)change.textContent=money(Math.max(0,r-total))}
+function calcMixed(total){let a=+(document.getElementById('mixCash')?.value||0),b=+(document.getElementById('mixOther')?.value||0),d=a+b-total;let status=document.getElementById('mixStatus');if(status)status.textContent=d>=0?'Pago completo · Cambio '+money(d):'Faltan '+money(Math.abs(d))}
+function confirmPayment(total){if(selectedPay==='Efectivo'){let r=+(document.getElementById('cashReceived')?.value||0);if(r<total)return toast('El efectivo recibido es menor al total')}if(selectedPay==='Mixto'){let a=+(document.getElementById('mixCash')?.value||0),b=+(document.getElementById('mixOther')?.value||0);if(a+b<total)return toast('El pago mixto no cubre el total')}if(selectedPay==='Crédito'){let creditSelect=document.getElementById('creditClientSelect');if(!creditSelect||!creditSelect.value)return alert('Selecciona un cliente para vender a crédito');let creditClient=Array.isArray(db?.clients)?db.clients.find(c=>String(c?.id)===String(creditSelect.value)):null;if(!creditClient)return alert('El cliente seleccionado no es válido');posClient=creditClient.id}finishSale(selectedPay,total,true)}
+'''
+          if old==new:
+              raise SystemExit('patch already applied')
+          s=s[:start]+new+s[end:]
+          p.write_text(s,encoding='utf-8')
+          PY
+          node --check <(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          Path('/tmp/index-scripts.js').write_text('\n'.join(re.findall(r'<script(?:[^>]*)>(.*?)</script>',s,re.S|re.I)))
+          PY
+          )
+      - name: Commit patch and clean temporary files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/patch-payment-modal.yml __ventara_temp_check__
+          git add index.html .github/workflows/patch-payment-modal.yml __ventara_temp_check__
+          git commit -m "fix: add credit client selector to payment modal [payment-modal-patched]"
+          git push origin main
