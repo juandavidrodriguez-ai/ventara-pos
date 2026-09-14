@@ -1,0 +1,134 @@
+name: Apply supplier deletion UI
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-supplier-delete.yml'
+permissions:
+  contents: write
+
+jobs:
+  supplier-delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Inject supplier delete UI
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          html = p.read_text(encoding='utf-8')
+          marker = '<script id="ventara-supplier-delete-v1">'
+          html = re.sub(r'<script id="ventara-supplier-delete-v1">.*?</script>\s*', '', html, flags=re.S)
+
+          patch = r'''<script id="ventara-supplier-delete-v1">
+          (function(){
+            if(window.__ventaraSupplierDeleteV1)return;
+            window.__ventaraSupplierDeleteV1=true;
+            function supplierList(){return Array.isArray(window.db&&window.db.suppliers)?window.db.suppliers:[]}
+            function supplierName(s){return String((s&& (s.name||s.nombre||s.businessName||s.razonSocial))||'').trim()}
+            function supplierId(s){return String((s&& (s.id||s.supplierId||s.codigo||s.code))||supplierName(s)).trim()}
+            function unlinkSupplier(id,name){
+              var products=Array.isArray(window.db&&window.db.products)?window.db.products:[];
+              products.forEach(function(p){
+                var relId=String((p&& (p.supplierId||p.proveedorId))||'').trim();
+                var relName=String((p&& (p.supplierName||p.proveedor||p.supplier))||'').trim();
+                if(relId===id||relName===name){
+                  if('supplierId' in p)p.supplierId='';
+                  if('proveedorId' in p)p.proveedorId='';
+                  if('supplierName' in p)p.supplierName='';
+                  if('proveedor' in p)p.proveedor='';
+                  if('supplier' in p)p.supplier='';
+                }
+              });
+            }
+            async function persistDelete(id,name){
+              var client=window.supabaseClient||window.supabase;
+              try{
+                if(client&&typeof client.from==='function'){
+                  var result=await client.from('suppliers').delete().eq('id',id);
+                  if(result&&result.error)console.warn('Supabase supplier delete:',result.error);
+                }
+              }catch(err){console.warn('Supabase supplier delete skipped:',err)}
+              unlinkSupplier(id,name);
+              window.db.suppliers=supplierList().filter(function(s){return supplierId(s)!==id});
+              if(typeof window.save==='function')await window.save();
+              if(typeof window.renderSuppliers==='function')window.renderSuppliers();
+              else if(typeof window.renderSuppliersView==='function')window.renderSuppliersView();
+            }
+            function suppliersView(){
+              var body=String((document.body&&document.body.innerText)||'').toLowerCase();
+              return body.indexOf('proveedores')!==-1 && document.querySelectorAll('table tbody tr').length>0;
+            }
+            function install(){
+              if(!suppliersView())return;
+              var list=supplierList();
+              document.querySelectorAll('table tbody tr').forEach(function(row){
+                if(row.dataset.ventaraSupplierDelete==='1')return;
+                var cells=row.querySelectorAll('td');
+                if(!cells.length)return;
+                var text=String(row.innerText||'').trim().toLowerCase();
+                var supplier=list.find(function(s){var n=supplierName(s).toLowerCase();return n&&text.indexOf(n)!==-1});
+                if(!supplier)return;
+                var action=cells[cells.length-1];
+                if(!action)return;
+                if(action.querySelector('[data-ventara-supplier-delete]')){row.dataset.ventaraSupplierDelete='1';return}
+                var btn=document.createElement('button');
+                btn.type='button';
+                btn.className='btn sm danger';
+                btn.dataset.ventaraSupplierDelete='1';
+                btn.textContent='Eliminar';
+                btn.style.marginLeft='6px';
+                btn.addEventListener('click',function(e){
+                  e.preventDefault();
+                  e.stopPropagation();
+                  var name=supplierName(supplier)||'este proveedor';
+                  if(!window.confirm('¿Estás seguro de eliminar este proveedor?'))return;
+                  persistDelete(supplierId(supplier),name).catch(function(err){
+                    console.error('Error al eliminar proveedor:',err);
+                    window.alert('No se pudo eliminar el proveedor: '+(err&&err.message?err.message:String(err)));
+                  });
+                });
+                action.appendChild(btn);
+                row.dataset.ventaraSupplierDelete='1';
+              });
+            }
+            new MutationObserver(install).observe(document.documentElement,{subtree:true,childList:true});
+            setInterval(install,800);
+            install();
+          })();
+          </script>'''
+          if '</body>' in html:
+              html=html.replace('</body>', patch+'\n</body>',1)
+          else:
+              html+=patch
+          p.write_text(html,encoding='utf-8')
+
+      - name: Validate inline JavaScript
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path('index.html').read_text(encoding='utf-8')
+          assert html.count('id="ventara-supplier-delete-v1"') == 1
+          scripts=re.findall(r'<script(?![^>]*src=)[^>]*>(.*?)</script>',html,flags=re.I|re.S)
+          Path('/tmp/ventara-inline.js').write_text('\n'.join(scripts),encoding='utf-8')
+          PY
+          node --check /tmp/ventara-inline.js
+
+      - name: Commit generated index
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: add supplier delete action [skip ci]"
+          git push
