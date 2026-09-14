@@ -4,3 +4,4 @@ Run updated frontend repair pipeline.
 Trigger client deletion UI repair.
 Trigger stable frontend pipeline.
 Trigger stable quote repair.
+Trigger idempotent client UI repair.
