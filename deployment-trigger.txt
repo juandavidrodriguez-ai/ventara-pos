@@ -1,2 +1,3 @@
 Deployment verification trigger for Vercel.
 Client deletion UI patch requested 2026-09-14.
+Run updated frontend repair pipeline.
