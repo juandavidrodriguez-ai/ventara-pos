@@ -12,20 +12,35 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Repair sale confirmation safely
+      - name: Apply surgical credit payment selector
         shell: python
         run: |
           from pathlib import Path
+          import re
           p = Path('index.html')
           s = p.read_text(encoding='utf-8')
+
+          start = s.index('function openPaymentModalPOS(){')
+          end = s.index('let selectedPay=', start)
+          new_open = r'''function openPaymentModalPOS(){if(!cart.length)return toast('Agrega productos a la venta');let subtotal=cart.reduce((a,i)=>a+i.qty*i.price,0),discount=+(document.getElementById('posDiscount')?.value||0),total=Math.max(0,subtotal-discount);let clients=(db.clients||[]).filter(c=>String(c.name||'').trim().toLowerCase()!=='consumidor final'&&c.id!=='c1');openModal(`<h2>💰 Cobrar VENTA</h2><p class="muted">Caja registradora · Total a cobrar</p><div style="text-align:center;background:#f4fbfd;padding:15px;border-radius:12px"><div class="muted">TOTAL</div><div style="font-size:38px;font-weight:900;color:#005f73">${money(total)}</div></div><h3>Forma de pago</h3><div class="payment-grid"><button id="pm-Efectivo" class="selected" onclick="selectPay('Efectivo')">💵 Efectivo</button><button id="pm-Tarjeta" onclick="selectPay('Tarjeta')">💳 Tarjeta</button><button id="pm-Transferencia" onclick="selectPay('Transferencia')">📲 Transferencia</button><button id="pm-Mixto" onclick="selectPay('Mixto')">🔀 Mixto</button><button id="pm-Crédito" onclick="selectPay('Crédito')">🧾 Crédito</button></div><div id="cashFields" style="margin-top:15px"><div class="field"><label>EFECTIVO RECIBIDO</label><input id="cashReceived" type="number" min="0" value="${total}" oninput="calcChange(${total})" onkeydown="if(event.key==='Enter')confirmPayment(${total},event)"></div><div class="totalline" style="font-size:18px;margin-top:10px"><span>Cambio</span><b id="cashChange">${money(0)}</b></div></div><div id="cardFields" style="display:none;margin-top:15px"><div class="field"><label>TIPO DE TARJETA</label><select id="cardType" required><option value="">-- Selecciona --</option><option value="Débito">Débito</option><option value="Crédito Visa">Crédito Visa</option><option value="Crédito Mastercard">Crédito Mastercard</option><option value="Otra">Otra</option></select></div></div><div id="transferFields" style="display:none;margin-top:15px"><div class="field"><label>BANCO / BILLETERA</label><select id="transferBank" required><option value="">-- Selecciona --</option><option value="Nequi">Nequi</option><option value="Daviplata">Daviplata</option><option value="Bancolombia">Bancolombia</option><option value="Otros">Otros</option></select></div></div><div id="creditFields" style="display:none;margin-top:15px"><div class="field"><label>CLIENTE PARA VENTA A CRÉDITO</label><select id="creditClientSelect"><option value="">-- Selecciona un cliente --</option>${clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></div><p id="creditWarning" class="muted" style="color:#9f1239">Selecciona un cliente para vender a crédito</p></div><div id="mixedFields" style="display:none;margin-top:15px"><div class="form"><div class="field"><label>Efectivo</label><input id="mixCash" type="number" value="0" oninput="calcMixed(${total})"></div><div class="field"><label>Tarjeta/Transferencia</label><input id="mixOther" type="number" value="${total}" oninput="calcMixed(${total})"></div></div><p id="mixStatus" class="muted"></p></div><div class="actions" style="margin-top:18px"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn success" style="padding:13px 22px" onclick="confirmPayment(${total},event)">✓ CONFIRMAR Y REGISTRAR VENTA</button></div>`)}
+'''
+          s = s[:start] + new_open + s[end:]
+
+          old_select = "let selectedPay='Efectivo';function selectPay(method){selectedPay=method;document.querySelectorAll('.payment-grid button').forEach(b=>b.classList.remove('selected'));document.getElementById('pm-'+method)?.classList.add('selected');document.getElementById('cashFields').style.display=method==='Efectivo'?'block':'none';document.getElementById('mixedFields').style.display=method==='Mixto'?'block':'none'}"
+          new_select = "let selectedPay='Efectivo';function selectPay(method){selectedPay=method;document.querySelectorAll('.payment-grid button').forEach(b=>b.classList.remove('selected'));let active=document.getElementById('pm-'+method);if(active)active.classList.add('selected');let panels={Efectivo:'cashFields',Tarjeta:'cardFields',Transferencia:'transferFields',Mixto:'mixedFields','Crédito':'creditFields'};Object.values(panels).forEach(id=>{let el=document.getElementById(id);if(el)el.style.display='none'});let panel=document.getElementById(panels[method]);if(panel)panel.style.display='block';let cash=document.getElementById('cashFields');if(cash)cash.style.display=method==='Efectivo'?'block':'none';let mixed=document.getElementById('mixedFields');if(mixed)mixed.style.display=method==='Mixto'?'block':'none';if(method==='Crédito'){let warning=document.getElementById('creditWarning');if(warning)warning.style.display='block'}})"
+          if old_select not in s:
+              raise SystemExit('selectPay target not found')
+          s = s.replace(old_select, new_select, 1)
+
           start = s.index('function confirmPayment(')
-          end = s.index('function offerTicket(', start)
-          new = """function confirmPayment(total,e){if(e){e.preventDefault();e.stopPropagation()}try{if(!cart.length)return toast('Agrega productos a la venta');if(selectedPay==='Efectivo'){let r=+(document.getElementById('cashReceived')?.value||0);if(r<total)return toast('El efectivo recibido es menor al total')}if(selectedPay==='Mixto'){let a=+(document.getElementById('mixCash')?.value||0),b=+(document.getElementById('mixOther')?.value||0);if(a+b!==total)return toast('El pago mixto debe ser exactamente igual al total')}let sale=finishSale(selectedPay,total);if(!sale)return;offerTicket(sale.id)}catch(error){console.error('Error al procesar la venta:',error);alert('Ocurrió un error al registrar la venta: '+(error?.message||String(error)))}}\nfunction finishSale(methodOverride,totalOverride){if(!cart.length)return null;let client=db.clients.find(c=>c.id===posClient)||db.clients[0];if(!client)return null;let discount=+(document.getElementById('posDiscount')?.value||0);let subtotal=cart.reduce((a,i)=>a+i.qty*i.price,0),total=totalOverride??Math.max(0,subtotal-discount),method=methodOverride||document.getElementById('payMethod')?.value||'Efectivo';if(method==='Crédito'){if(client.id==='c1'){toast('Selecciona un cliente para vender a crédito');return null}if(client.creditEnabled===false){toast('Este cliente no tiene el fiado habilitado');return null}if((client.balance||0)+total>(client.credit||0)){toast('La venta supera el límite de crédito disponible');return null}client.balance=(client.balance||0)+total;client.lastCreditDate=today();client.nextPaymentDate=new Date(Date.now()+((client.creditDays||30)*86400000)).toISOString().slice(0,10)}cart.forEach(i=>{let p=db.products.find(x=>x.id===i.id);if(!p)throw new Error('Producto no encontrado: '+i.id);if(i.qty>p.stock)throw new Error('Stock insuficiente para '+p.name);p.stock-=i.qty;db.kardex.unshift({id:uid('k'),date:today(),type:'Venta',ref:'',productId:p.id,qty:-i.qty,balance:p.stock,cost:p.cost})});let sale={cashier:currentUser?.name||'Administrador',cashierId:currentUser?.id||'',userId:currentUser?.id||'',cashId:userCashId(),id:uid('v'),number:'V-'+String(db.sales.length+1).padStart(6,'0'),date:today(),time:new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}),clientId:client.id,total,discount,method,status:method==='Crédito'?'Crédito':'Pagada',items:cart.map(i=>{let p=db.products.find(x=>x.id===i.id);return {...i,name:p.name}})};db.sales.unshift(sale);if(method!=='Crédito')db.cash.balance+=total;if(typeof log==='function')log('Venta registrada',sale.number);save();cart=[];closeModal();renderPOS();toast('FACTURA registrada · '+sale.number);return sale}\n"""
-          s = s[:start] + new + s[end:]
-          s = s.replace('onclick=\"confirmPayment(${total})\"','onclick=\"confirmPayment(${total},event)\"',1)
-          s = s.replace("onkeydown=\"if(event.key==='Enter')confirmPayment(${total})\"","onkeydown=\"if(event.key==='Enter')confirmPayment(${total},event)\"",1)
+          end = s.index('function finishSale(', start)
+          new_confirm = r'''function confirmPayment(total,e){if(e){e.preventDefault();e.stopPropagation()}try{if(!cart.length)return toast('Agrega productos a la venta');if(selectedPay==='Efectivo'){let r=+(document.getElementById('cashReceived')?.value||0);if(r<total)return toast('El efectivo recibido es menor al total')}if(selectedPay==='Mixto'){let a=+(document.getElementById('mixCash')?.value||0),b=+(document.getElementById('mixOther')?.value||0);if(a+b!==total)return toast('El pago mixto debe ser exactamente igual al total')}if(selectedPay==='Crédito'){let creditSelect=document.getElementById('creditClientSelect');if(!creditSelect||!creditSelect.value)return alert('Selecciona un cliente para vender a crédito');posClient=creditSelect.value}let sale=finishSale(selectedPay,total);if(!sale)return;offerTicket(sale.id)}catch(error){console.error('Error al procesar la venta:',error);alert('Ocurrió un error al registrar la venta: '+(error?.message||String(error)))}}
+'''
+          s = s[:start] + new_confirm + s[end:]
+
           p.write_text(s, encoding='utf-8')
-      - name: Validate JavaScript blocks
+
+      - name: Validate JavaScript
         shell: bash
         run: |
           python - <<'PY'
@@ -36,12 +51,14 @@ jobs:
           Path('/tmp/scripts-check.js').write_text('\n'.join(blocks),encoding='utf-8')
           PY
           node --check /tmp/scripts-check.js
-      - name: Commit repair
+
+      - name: Commit index only and restore workflow
         shell: bash
         run: |
+          git checkout HEAD~1 -- .github/workflows/emergency-sale-fix.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add index.html
+          git add index.html .github/workflows/emergency-sale-fix.yml
           git diff --cached --quiet && exit 0
-          git commit -m 'fix: emergency safe sale confirmation flow'
+          git commit -m 'fix: add defensive credit payment selector'
           git push origin HEAD:main
