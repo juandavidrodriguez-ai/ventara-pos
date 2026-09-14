@@ -1,1 +1,2 @@
 Deployment verification trigger for Vercel.
+Payment selector automation trigger.
