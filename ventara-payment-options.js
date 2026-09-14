@@ -10,6 +10,16 @@
     }catch(e){return 0}
   };
   const getModalBox=()=>document.getElementById('modalbox');
+  const creditFieldNames=['allowCredit','credito','tieneCredito','creditLimit','cupoCredito'];
+  const isTruthyCredit=v=>v===true||v===1||['true','1','si','sí','yes','habilitado','autorizado'].includes(String(v??'').trim().toLowerCase());
+  const isCreditEligible=c=>{
+    if(!c||!c.id)return false;
+    const hasCreditMetadata=creditFieldNames.some(k=>Object.prototype.hasOwnProperty.call(c,k));
+    if(!hasCreditMetadata)return true;
+    return isTruthyCredit(c.allowCredit)||isTruthyCredit(c.credito)||isTruthyCredit(c.tieneCredito)||Number(c.creditLimit||0)>0||Number(c.cupoCredito||0)>0;
+  };
+  const safeText=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const safeValue=v=>safeText(v);
   const ensureFields=(total)=>{
     const box=getModalBox();if(!box)return null;
     let el=document.getElementById('paymentFields');
@@ -50,8 +60,10 @@
     }else if(window.selectedPay==='Mixto'){
       el.innerHTML=`<div class="form"><div class="field"><label>EFECTIVO *</label><input id="mixCash" type="number" min="0" step="0.01" value="0" oninput="window.updatePaymentState(${total})"></div><div class="field"><label>TARJETA / TRANSFERENCIA *</label><input id="mixOther" type="number" min="0" step="0.01" value="${total}" oninput="window.updatePaymentState(${total})"></div></div><p id="mixStatus" class="muted">La suma debe ser exactamente ${money(total)}.</p>`;
     }else{
-      const clients=Array.isArray(window.db?.clients)?window.db.clients.filter(c=>c&&c.id&&String(c.name||'').trim().toLowerCase()!=='consumidor final'&&c.id!=='c1'):[];
-      el.innerHTML=`<div class="field"><label>CLIENTE PARA CRÉDITO *</label><select id="creditClient" onchange="window.posClient=this.value;window.updatePaymentState(${total})"><option value="">Selecciona un cliente...</option>${clients.map(c=>`<option value="${String(c.id).replace(/"/g,'&quot;')}">${String(c.name||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))} · ${String(c.doc||c.nit||'Sin documento')}</option>`).join('')}</select>${clients.length?'':'<div class="muted" style="margin-top:8px;color:#b91c1c">No hay clientes habilitados para crédito.</div>'}<div class="muted" style="margin-top:7px">Selecciona un cliente real para asignar la cuenta por cobrar.</div></div>`;
+      const clients=Array.isArray(window.db?.clients)?window.db.clients.filter(c=>isCreditEligible(c)&&String(c.name||'').trim().toLowerCase()!=='consumidor final'):[];
+      const options=clients.map(c=>`<option value="${safeValue(c.id)}">${safeText(c.name||'Cliente')} · ${safeText(c.doc||c.nit||'Sin documento')}</option>`).join('');
+      const emptyMessage=clients.length?'':'<div class="muted" style="margin-top:8px;color:#b91c1c">No hay clientes habilitados para crédito. Crea o habilita un cliente con cupo de crédito.</div>';
+      el.innerHTML=`<div class="field"><label>CLIENTE PARA CRÉDITO *</label><select id="creditClient" onchange="window.posClient=this.value;window.updatePaymentState(${total})"><option value="">${clients.length?'Selecciona un cliente...':'-- No hay clientes disponibles --'}</option>${options}</select>${emptyMessage}<div class="muted" style="margin-top:7px">Selecciona un cliente autorizado para asignar la cuenta por cobrar.</div></div>`;
     }
     window.updatePaymentState(total);
   };
