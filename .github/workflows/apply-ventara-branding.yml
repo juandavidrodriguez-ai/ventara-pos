@@ -66,6 +66,21 @@ function deleteCreditLine(id){let c=db.clients.find(x=>x.id===id);if(!c)return;l
           p.write_text(html, encoding='utf-8')
           PY
 
+      - name: Ensure product category is a native dropdown
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path("index.html")
+          html = p.read_text(encoding="utf-8")
+          old = '<div class="field"><label>Categoría</label><input id="f_cat" value="${p.category}"></div>'
+          new = '''<div class="field"><label>Categoría</label><select id="f_cat">${[...(Array.isArray(db.categories)?db.categories:[]),...db.products.map(x=>x.category||'')].map(c=>typeof c==='string'?c:(c?.name||c?.label||'')).map(c=>c.trim()).filter(Boolean).filter((c,i,a)=>a.indexOf(c)===i).concat('General').filter((c,i,a)=>a.indexOf(c)===i).map(c=>`<option value="${String(c).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;')}" ${String(c)===String(p.category)?'selected':''}>${String(c).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;')}</option>`).join('')}</select></div>'''
+          if old not in html:
+              raise SystemExit('Expected category input was not found; refusing to modify index.html')
+          html = html.replace(old, new, 1)
+          p.write_text(html, encoding='utf-8')
+          PY
+
       - name: Validate JavaScript
         run: |
           python - <<'PY'
