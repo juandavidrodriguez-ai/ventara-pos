@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply exact Ventara sidebar branding
+      - name: Apply exact Ventara sidebar branding and client deletion UI
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -25,10 +25,6 @@ jobs:
           p = Path("index.html")
           html = p.read_text(encoding="utf-8")
 
-          # The sidebar must use the exact complete Ventara wordmark supplied
-          # by the user. It is the transparent 608x206 asset assets/ventara.png.
-          # Replace both old file references and old inline/data-URI sidebar
-          # logos, while leaving the login/top logos untouched.
           html = re.sub(
               r'(<div[^>]*class=["\']brand["\'][^>]*>\s*<img[^>]+src=["\'])(?:data:image/[^"\']+|assets/(?:ventara\.png|ventara-logo\.png|ventara-favicon\.png))(["\'])',
               r'\1assets/ventara.png\2',
@@ -46,25 +42,46 @@ jobs:
           .nav.active{background:linear-gradient(90deg,var(--orange),var(--orange2))!important;color:#fff!important}
           .navtitle{color:rgba(255,255,255,.72)!important}
           </style>'''
-
-          # Remove any previous branding overrides before adding the corrected
-          # version. This prevents the old rectangular white shadow from
-          # surviving subsequent deployments.
-          html = re.sub(
-              r'<style id="ventara-sidebar-branding">.*?</style>\s*',
-              '',
-              html,
-              flags=re.I|re.S,
-          )
+          html = re.sub(r'<style id="ventara-sidebar-branding">.*?</style>\s*', '', html, flags=re.I|re.S)
           html = html.replace('</head>', css + '\n</head>', 1)
+
+          def replace_function(source, name, next_name, replacement):
+              start = source.index(name)
+              end = source.index(next_name, start)
+              return source[:start] + replacement + source[end:]
+
+          clients_fn = r'''function renderClients(){document.getElementById('clients').innerHTML=pageHead('Clientes','Clientes, línea de crédito y condiciones de pago',`<button class="btn primary" onclick="openClientModal()">+ Cliente</button>`)+`<div class="card">${table(['Cliente','Documento','Teléfono','Crédito','Saldo','Estado','Acciones'],db.clients.map(c=>`<tr><td>${c.name}</td><td>${c.doc}</td><td>${c.phone}</td><td>${money(c.credit)}</td><td>${money(c.balance)}</td><td>${c.balance>0?'<span class="badge warn">Pendiente</span>':'<span class="badge green">Al día</span>'}</td><td><button class="btn sm" onclick="openClientModal('${c.id}')">Editar</button>${c.id!=='c1'&&String(c.name||'').trim().toLowerCase()!=='consumidor final'?` <button class="btn sm danger" onclick="deleteClient('${c.id}')">Eliminar</button>`:''}</td></tr>`).join(''))}</div>`}
+'''
+          html = replace_function(html, 'function renderClients(){', 'function openClientModal', clients_fn)
+
+          recv_fn = r'''function renderReceivables(){let debtors=db.clients.filter(c=>c.balance>0);let total=debtors.reduce((a,c)=>a+c.balance,0);document.getElementById('receivables').innerHTML=pageHead('Fiados / Crédito','La libreta de fiados digital de VENTARA',`<button class="btn primary" onclick="openClientModal()">+ Nueva línea de crédito</button><button class="btn" onclick="exportCreditReport()">Exportar cartera</button>`)+`<div class="grid cols3"><div class="card kpi"><div class="label">Total fiado</div><div class="value">${money(total)}</div></div><div class="card kpi"><div class="label">Clientes con saldo</div><div class="value">${debtors.length}</div></div><div class="card kpi"><div class="label">Líneas habilitadas</div><div class="value">${db.clients.filter(c=>c.creditEnabled).length}</div></div></div><div class="card" style="margin-top:16px">${table(['Cliente','Límite','Saldo','Disponible','Plazo','Acción'],db.clients.filter(c=>c.creditEnabled||c.balance>0).map(c=>`<tr><td><b>${c.name}</b><br><small class="muted">${c.doc||''}</small></td><td>${money(c.credit)}</td><td>${money(c.balance)}</td><td>${money(Math.max(0,(c.credit||0)-(c.balance||0)))}</td><td>${c.creditDays??0} días</td><td><button class="btn sm" onclick="openPaymentModal('${c.id}')">Abonar</button> <button class="btn sm" onclick="openClientModal('${c.id}')">Editar</button> <button class="btn sm danger" onclick="deleteCreditLine('${c.id}')">Eliminar</button></td></tr>`).join(''),'No hay líneas de crédito configuradas')}</div>`}
+'''
+          html = replace_function(html, 'function renderReceivables(){', 'function openPaymentModal', recv_fn)
+
+          insert_at = html.index('function renderReceivables(){')
+          helpers = r'''function deleteClient(id){let c=db.clients.find(x=>x.id===id);if(!c)return;if(c.id==='c1'||String(c.name||'').trim().toLowerCase()==='consumidor final')return toast('Consumidor final no se puede eliminar');if(!confirm('¿Estás seguro de eliminar este cliente?'))return;db.clients=db.clients.filter(x=>x.id!==id);if(posClient===id)posClient='c1';save();renderClients();toast('Cliente eliminado')}
+function deleteCreditLine(id){let c=db.clients.find(x=>x.id===id);if(!c)return;let pending=Number(c.balance||0);let message=pending>0?'Este cliente tiene saldo pendiente de '+money(pending)+'. Al eliminar la línea también se eliminará el cliente y el saldo registrado. ¿Deseas continuar?':'¿Eliminar la línea de crédito correspondiente a este cliente?';if(!confirm(message))return;db.clients=db.clients.filter(x=>x.id!==id);if(posClient===id)posClient='c1';save();renderReceivables();toast('Línea de crédito eliminada')}
+'''
+          html = html[:insert_at] + helpers + html[insert_at:]
           p.write_text(html, encoding='utf-8')
           PY
 
-      - name: Commit branding changes
+      - name: Validate JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('index.html').read_text(encoding='utf-8')
+          blocks=re.findall(r'<script[^>]*>(.*?)</script>',s,re.S|re.I)
+          Path('/tmp/scripts-check.js').write_text('\n'.join(blocks),encoding='utf-8')
+          PY
+          node --check /tmp/scripts-check.js
+
+      - name: Commit branding and UI changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet && exit 0
-          git commit -m "fix: use exact Ventara wordmark with silhouette outline [skip ci]"
+          git commit -m "feat: add client and credit line deletion actions [skip ci]"
           git push
