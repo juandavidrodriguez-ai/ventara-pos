@@ -54,10 +54,10 @@
       const edit=[...tr.querySelectorAll('button')].find(b=>/editar/i.test(b.textContent||''));
       const supplier=suppliers[index];
       if(!edit||!supplier)return;
-      const id=String(supplier.id||'');
+      const id=String(supplier.id||supplier.supplierId||'');
       if(!id)return;
       const del=document.createElement('button');
-      del.className='btn btn-sm btn-danger btn-delete-supplier';
+      del.className='btn btn-sm btn-danger btn-delete-supplier ms-1';
       del.dataset.id=id;
       del.type='button';
       del.textContent='Eliminar';
@@ -71,12 +71,10 @@
     const target=String(id||'');
     if(!target)return;
     if(!window.confirm('¿Desea eliminar este proveedor?'))return;
-    const index=suppliers.findIndex(s=>String(s?.id||'')===target);
-    if(index<0)return;
-    suppliers.splice(index,1);
-    try{if(typeof window.save==='function')window.save()}catch(e){console.warn('[VENTARA] supplier save',e)}
+    window.db.suppliers=suppliers.filter(s=>String(s?.id||s?.supplierId||'')!==target);
+    try{if(typeof window.saveDb==='function')window.saveDb();else if(typeof window.save==='function')window.save()}catch(e){console.warn('[VENTARA] supplier save',e)}
     try{if(typeof window.cloudSave==='function')Promise.resolve(window.cloudSave()).catch(e=>console.warn('[VENTARA] supplier cloud save',e))}catch(e){console.warn('[VENTARA] supplier cloud save',e)}
-    try{if(typeof window.renderSuppliers==='function')window.renderSuppliers();else injectDeleteButtons()}catch(e){console.warn('[VENTARA] supplier table refresh',e);injectDeleteButtons()}
+    try{if(typeof window.renderSuppliers==='function')window.renderSuppliers()}catch(e){console.warn('[VENTARA] supplier table refresh',e);injectDeleteButtons()}
   }catch(e){console.warn('[VENTARA] delete supplier',e)}}
 
   function bindSupplierTable(){try{
@@ -88,7 +86,7 @@
       if(!btn)return;
       e.preventDefault();
       e.stopPropagation();
-      deleteSupplier(btn.dataset.id);
+      deleteSupplier(btn.getAttribute('data-id'));
     }catch(err){console.warn('[VENTARA] supplier delete click',err)}});
     injectDeleteButtons();
   }catch(e){console.warn('[VENTARA] bind supplier table',e)}}
