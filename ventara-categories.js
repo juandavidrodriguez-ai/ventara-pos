@@ -2,7 +2,7 @@
 (()=>{
   'use strict';
   const getDb=()=>{try{return typeof db!=='undefined'?db:(window.db||null)}catch(e){return window.db||null}};
-  const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
   const notify=m=>{try{if(typeof window.toast==='function')window.toast(m);else alert(String(m))}catch(e){console.log('[VENTARA]',m)}};
 
   if(typeof window.toast!=='function'){
@@ -139,3 +139,10 @@
 
 // Carga aislada de los campos secundarios de pago, sin modificar la lógica de venta.
 (()=>{const s=document.createElement('script');s.src='ventara-payment-options.js';s.defer=false;document.head.appendChild(s)})();
+
+// Carga directa para GitHub Pages: vercel.json no aplica en Pages.
+(()=>{
+  const load=(src)=>{if(document.querySelector(`script[src="${src}"]`))return;const s=document.createElement('script');s.src=src;s.defer=false;document.head.appendChild(s)};
+  load('ventara-sales-filter.js');
+  load('ventara-suppliers-patch.js');
+})();
