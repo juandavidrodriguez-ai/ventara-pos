@@ -53,3 +53,10 @@ function boot(){
 new MutationObserver(boot).observe(document.documentElement,{childList:true,subtree:true});
 setInterval(boot,500);boot();
 })();
+
+// Carga directa de los filtros adicionales para GitHub Pages, sin modificar index.html.
+(()=>{
+  const load=src=>{if(document.querySelector(`script[src="${src}"]`))return;const s=document.createElement('script');s.src=src;s.defer=false;document.head.appendChild(s)};
+  load('ventara-clients-patch.js');
+  load('ventara-quotes-patch.js');
+})();
