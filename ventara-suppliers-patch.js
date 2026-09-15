@@ -11,19 +11,20 @@
 
   const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const root=()=>document.getElementById('suppliers');
+  const suppliers=()=>Array.isArray(window.db?.suppliers)?window.db.suppliers:[];
 
   function supplierForRow(tr,index){
-    const list=Array.isArray(window.db?.suppliers)?window.db.suppliers:[];
+    const list=suppliers();
     return list[index]||null;
   }
 
   function supplierText(s,tr){
     const values=[];
     if(s){
-      values.push(s.name,s.businessName,s.razonSocial,s.razon_social,s.nombre,s.commercialName);
-      values.push(s.nit,s.doc,s.identification,s.document,s.documento,s.taxId);
-      values.push(s.phone,s.telephone,s.telefono,s.mobile,s.celular);
-      values.push(s.contact,s.contactName,s.contacto,s.contactoPrincipal,s.contactPerson);
+      values.push(s.name,s.businessName,s.razonSocial,s.razon_social,s.nombre,s.commercialName,s.legalName);
+      values.push(s.nit,s.doc,s.identification,s.document,s.documento,s.taxId,s.taxNumber);
+      values.push(s.phone,s.telephone,s.telefono,s.mobile,s.celular,s.phoneNumber);
+      values.push(s.contact,s.contactName,s.contacto,s.contactoPrincipal,s.contactPerson,s.primaryContact,s.contactoPrincipalNombre);
     }
     values.push(tr?.innerText||'');
     return norm(values.filter(v=>v!==undefined&&v!==null).join(' '));
@@ -38,9 +39,9 @@
     bar=document.createElement('div');
     bar.setAttribute(MARK,'1');
     bar.style.cssText='margin:0 0 16px;padding:14px 16px;border:1px solid var(--border,#dbe3ea);border-radius:10px;background:#f8fafc';
-    bar.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><b>🔎 Buscar proveedores</b><div class="muted" style="margin-top:3px">Nombre, razón social, NIT/cédula, teléfono o contacto</div></div><span id="ventaraSuppliersCount" class="muted"></span></div><div class="field" style="margin:10px 0 0"><input id="ventaraSuppliersSearch" type="search" autocomplete="off" placeholder="Ej. Proveedor ABC, 900123456, 3001234567, Carlos"></div>';
+    bar.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><b>🔎 Buscar proveedores</b><div class="muted" style="margin-top:3px">Nombre, razón social, NIT/cédula, teléfono o contacto</div></div><span data-vsp-count class="muted"></span></div><div class="field" style="margin:10px 0 0"><input data-vsp-search type="search" autocomplete="off" placeholder="Ej. Proveedor ABC, 900123456, 3001234567, Carlos"></div>';
     table.parentNode.insertBefore(bar,table);
-    bar.querySelector('#ventaraSuppliersSearch')?.addEventListener('input',apply);
+    bar.querySelector('[data-vsp-search]')?.addEventListener('input',apply);
     return bar;
   }
 
@@ -52,7 +53,7 @@
     if(!table||!body)return;
     const bar=inject(r);
     if(!bar)return;
-    const q=norm(bar.querySelector('#ventaraSuppliersSearch')?.value||'');
+    const q=norm(bar.querySelector('[data-vsp-search]')?.value||'');
     const rows=Array.from(body.querySelectorAll('tr')).filter(tr=>!tr.hasAttribute(EMPTY));
     let visible=0;
     busy=true;
@@ -72,7 +73,7 @@
         }
         empty.style.display='';
       }else if(empty)empty.style.display='none';
-      const count=bar.querySelector('#ventaraSuppliersCount');
+      const count=bar.querySelector('[data-vsp-count]');
       if(count)count.textContent=`${visible} proveedor${visible===1?'':'es'} encontrado${visible===1?'':'s'}`;
     }finally{busy=false}
   }
