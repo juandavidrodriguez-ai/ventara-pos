@@ -1,31 +1,39 @@
-/* VENTARA POS - Campos secundarios por forma de pago. Solo interfaz/validación. */
+/* VENTARA POS - Complemento quirúrgico para clientes de crédito.
+   NO reemplaza ni redefine selectPay, renderPaymentFields,
+   openPaymentModalPOS ni confirmPayment. El core conserva el control. */
 (()=>{
 'use strict';
-const totalNow=()=>{try{const subtotal=(window.cart||[]).reduce((a,i)=>a+(Number(i?.qty)||0)*(Number(i?.price)||0),0),discount=Number(document.getElementById('posDiscount')?.value||0);return Math.max(0,subtotal-discount)}catch(e){return 0}};
-const getModalBox=()=>document.getElementById('modalbox');
-const isTruthyCredit=v=>v===true||v===1||['true','1','si','sí','yes','habilitado','autorizado','activo'].includes(String(v??'').trim().toLowerCase());
-const safeText=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const isTruthy=v=>v===true||v===1||['true','1','si','sí','yes','habilitado','autorizado','activo'].includes(String(v??'').trim().toLowerCase());
 const clientName=c=>String(c?.name??c?.fullName??c?.nombre??c?.razonSocial??c?.razon_social??'').trim();
-const clientDoc=c=>String(c?.doc??c?.document??c?.documento??c?.nit??c?.identification??c?.cedula??'').trim();
-const isCreditConfigured=c=>{try{if(!c)return false;const explicit=[c.hasCredit,c.allowCredit,c.creditEnabled];if(explicit.some(isTruthyCredit))return true;return [c.creditLimit,c.cupoCredito,c.cupoDeCredito,c.credit].some(v=>Number(v)>0)}catch(e){console.error('[VENTARA] credit configuration',e);return false}};
-const isActiveClient=c=>{try{return !!c&&c.id&&clientName(c).toLowerCase()!=='consumidor final'&&c.active!==false&&c.activo!==false&&c.enabled!==false}catch(e){return false}};
-/* IMPORTANTE: este listado lee directamente db.clients. No depende de filtros de tablas externas. */
-const getCreditClients=()=>{try{
- const clients=Array.isArray(window.db?.clients)?window.db.clients:[];
- if(!clients.length)return [];
- const configured=clients.filter(c=>isActiveClient(c)&&isCreditConfigured(c));
- /* Fallback de seguridad solicitado: si el esquema de crédito no está definido
-    o no hay coincidencias, mostrar todos los clientes activos registrados. */
- return configured.length?configured:clients.filter(isActiveClient);
-}catch(e){console.error('[VENTARA] credit clients',e);return[]}};
-const ensureFields=()=>{try{const box=getModalBox();if(!box)return null;let el=document.getElementById('paymentFields');if(!el){const grid=box.querySelector('.payment-grid');if(!grid)return null;el=document.createElement('div');el.id='paymentFields';el.style.marginTop='15px';grid.insertAdjacentElement('afterend',el)}return el}catch(e){console.error('[VENTARA] payment fields',e);return null}};
-const populateCreditClient=()=>{try{const select=document.getElementById('creditClient');if(!select)return;const clients=getCreditClients(),current=String(select.value||'');select.innerHTML=`<option value="">${clients.length?'Selecciona un cliente...':'-- No hay clientes disponibles --'}</option>`+clients.map(c=>`<option value="${safeText(c.id)}">${safeText(clientName(c)||'Cliente')} · ${safeText(clientDoc(c)||'Sin documento')}</option>`).join('');if(clients.some(c=>String(c.id)===current))select.value=current;else if(current)window.posClient='';}catch(e){console.error('[VENTARA] populate credit clients',e)}};
-const paymentState=total=>{try{const b=document.querySelector('#modalbox .btn.success');if(!b)return;let ok=true;if(window.selectedPay==='Efectivo')ok=Number(document.getElementById('cashReceived')?.value||0)>=total;if(window.selectedPay==='Tarjeta')ok=!!document.getElementById('cardType')?.value;if(window.selectedPay==='Transferencia')ok=!!document.getElementById('transferProvider')?.value;if(window.selectedPay==='Mixto'){const a=Number(document.getElementById('mixCash')?.value||0),c=Number(document.getElementById('mixOther')?.value||0);ok=Math.round(a*100)+Math.round(c*100)===Math.round(total*100)}if(window.selectedPay==='Crédito')ok=!!document.getElementById('creditClient')?.value;b.disabled=!ok||!!window.__ventaraSaleBusy}catch(e){console.error('[VENTARA] payment state',e)}};
-window.renderPaymentFields=function(total){try{const el=ensureFields();if(!el)return;const cash=document.getElementById('cashFields'),mixed=document.getElementById('mixedFields');if(cash)cash.style.display='none';if(mixed)mixed.style.display='none';if(window.selectedPay==='Efectivo')el.innerHTML=`<div class="field"><label>EFECTIVO RECIBIDO</label><input id="cashReceived" type="number" min="0" step="0.01" value="${total}" oninput="window.updatePaymentState(${total})"><div class="totalline"><span>Cambio</span><b id="cashChange">${money(0)}</b></div></div>`;else if(window.selectedPay==='Tarjeta')el.innerHTML=`<div class="field"><label>TIPO DE TARJETA *</label><select id="cardType" onchange="window.updatePaymentState(${total})"><option value="">Selecciona...</option><option value="Débito">Débito</option><option value="Crédito Visa">Crédito Visa</option><option value="Crédito Mastercard">Crédito Mastercard</option><option value="Otra">Otra</option></select></div>`;else if(window.selectedPay==='Transferencia')el.innerHTML=`<div class="field"><label>BANCO / BILLETERA *</label><select id="transferProvider" onchange="window.updatePaymentState(${total})"><option value="">Selecciona...</option><option value="Nequi">Nequi</option><option value="Daviplata">Daviplata</option><option value="Bancolombia">Bancolombia</option><option value="Otros">Otros</option></select></div>`;else if(window.selectedPay==='Mixto')el.innerHTML=`<div class="form"><div class="field"><label>EFECTIVO *</label><input id="mixCash" type="number" min="0" step="0.01" value="0" oninput="window.updatePaymentState(${total})"></div><div class="field"><label>TARJETA / TRANSFERENCIA *</label><input id="mixOther" type="number" min="0" step="0.01" value="${total}" oninput="window.updatePaymentState(${total})"></div></div><p id="mixStatus" class="muted">La suma debe ser exactamente ${money(total)}.</p>`;else{el.innerHTML=`<div class="field"><label>CLIENTE PARA CRÉDITO *</label><select id="creditClient" onchange="window.posClient=this.value;window.updatePaymentState(${total})"></select><div id="creditClientEmpty" class="muted" style="margin-top:8px;color:#b91c1c"></div><div class="muted" style="margin-top:7px">La lista se obtiene directamente de los clientes registrados.</div></div>`;populateCreditClient();const empty=document.getElementById('creditClientEmpty');if(empty)empty.textContent=getCreditClients().length?'':'No hay clientes creados con opción de crédito activa'}window.updatePaymentState(total)}catch(e){console.error('[VENTARA] render payment fields',e)}};
-window.updatePaymentState=function(total){try{if(window.selectedPay==='Efectivo'){const r=Number(document.getElementById('cashReceived')?.value||0),ch=document.getElementById('cashChange');if(ch)ch.textContent=money(Math.max(0,r-total))}if(window.selectedPay==='Mixto'){const a=Number(document.getElementById('mixCash')?.value||0),c=Number(document.getElementById('mixOther')?.value||0),d=Math.round(a*100)+Math.round(c*100)-Math.round(total*100),st=document.getElementById('mixStatus');if(st)st.textContent=d===0?'Pago completo':d>0?'Pago completo · Cambio '+money(d/100):'Faltan '+money(Math.abs(d)/100)}paymentState(total)}catch(e){console.error('[VENTARA] update payment',e)}};
-window.selectPay=function(method){try{window.selectedPay=method;document.querySelectorAll('#modalbox .payment-grid button').forEach(b=>b.classList.remove('selected'));const btn=document.getElementById('pm-'+method);if(btn)btn.classList.add('selected');window.renderPaymentFields(totalNow())}catch(e){console.error('[VENTARA] select pay',e)}};
-window.deleteCreditLine=function(clientId){try{const id=String(clientId||'').trim();if(!id||!window.db)return;const client=Array.isArray(window.db.clients)?window.db.clients.find(c=>String(c?.id)===id):null;if(!client)return alert('No se encontró el cliente de la línea de crédito.');const balance=Number(client.balance||0);if(balance>0)return alert('No se puede eliminar una línea de crédito con saldo pendiente de '+money(balance)+'.');if(!confirm('¿Deseas eliminar la línea de crédito de '+(client.name||'este cliente')+'?'))return;['credits','creditLines'].forEach(key=>{if(Array.isArray(window.db[key]))window.db[key]=window.db[key].filter(x=>String(x?.clientId??x?.customerId??x?.client_id??x?.customer_id??'')!==id)});if(Object.prototype.hasOwnProperty.call(client,'creditEnabled'))client.creditEnabled=false;if(Object.prototype.hasOwnProperty.call(client,'credit'))client.credit=0;if(typeof save==='function')save();if(typeof renderReceivables==='function')renderReceivables();alert('Línea de crédito eliminada correctamente.')}catch(error){console.error('[VENTARA] delete credit line',error);alert('No fue posible eliminar la línea de crédito: '+(error?.message||String(error)))}};
-function enhanceReceivables(){try{const root=document.getElementById('receivables');if(!root)return;root.querySelectorAll('button').forEach(editBtn=>{const onclick=editBtn.getAttribute('onclick')||'',match=onclick.match(/openClientModal\(['"]([^'"]+)['"]\)/);if(!match||editBtn.parentElement?.querySelector('.ventara-delete-credit'))return;const del=document.createElement('button');del.type='button';del.className='btn sm danger ventara-delete-credit';del.textContent='Eliminar';del.addEventListener('click',()=>window.deleteCreditLine(match[1]));editBtn.insertAdjacentElement('afterend',del)})}catch(e){console.error('[VENTARA] receivables enhancement',e)}}
-function start(){try{enhanceReceivables()}catch(e){console.error('[VENTARA] payment boot',e)}}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(start,2000),{once:true});else setTimeout(start,2000);
+const isActive=c=>{try{return !!c&&c.id&&clientName(c).toLowerCase()!=='consumidor final'&&c.active!==false&&c.activo!==false&&c.enabled!==false}catch(e){return false}};
+const hasCredit=c=>{try{return isTruthy(c?.hasCredit)||isTruthy(c?.allowCredit)||isTruthy(c?.creditEnabled)||Number(c?.creditLimit)>0||Number(c?.credit)>0}catch(e){return false}};
+const clients=()=>{try{
+  const source=typeof db!=='undefined'&&Array.isArray(db?.clients)?db.clients:(Array.isArray(window.db?.clients)?window.db.clients:[]);
+  const active=source.filter(isActive), configured=active.filter(hasCredit);
+  return configured.length?configured:active;
+}catch(e){console.error('[VENTARA] credit clients complement',e);return[]}};
+const restoreNativeCreditSelect=()=>{try{
+  const select=document.getElementById('creditClientSelect');
+  if(!select)return;
+  /* El core ya lo puebla. Solo intervenimos si quedó vacío, sin reemplazar su lógica. */
+  if(select.options.length>1)return;
+  const list=clients();
+  if(!list.length)return;
+  const current=String(select.value||'');
+  select.innerHTML='<option value="">-- Selecciona un cliente --</option>';
+  list.forEach(c=>{
+    const option=document.createElement('option');
+    option.value=String(c.id);
+    option.textContent=clientName(c)||'Cliente';
+    select.appendChild(option);
+  });
+  if(list.some(c=>String(c.id)===current))select.value=current;
+}catch(e){console.error('[VENTARA] credit selector complement',e)}};
+function onDocumentClick(event){try{
+  const target=event.target?.closest?.('#pm-Crédito');
+  if(!target)return;
+  setTimeout(restoreNativeCreditSelect,0);
+}catch(e){console.error('[VENTARA] credit click complement',e)}}
+function boot(){try{document.addEventListener('click',onDocumentClick,true)}catch(e){console.error('[VENTARA] payment complement boot',e)}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
