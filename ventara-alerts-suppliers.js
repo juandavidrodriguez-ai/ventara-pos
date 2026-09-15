@@ -1,0 +1,69 @@
+/* VENTARA POS - Alertas de stock y proveedor por producto. Modular, visual y no destructivo. */
+(()=>{
+  'use strict';
+  const MARK='data-ventara-alerts-suppliers';
+  const db=()=>window.db||null;
+  const products=()=>Array.isArray(db()?.products)?db().products:[];
+  const suppliers=()=>Array.isArray(db()?.suppliers)?db().suppliers:[];
+  const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  const supplierName=s=>String(s?.name??s?.businessName??s?.razonSocial??s?.razon_social??s?.commercialName??s?.nombre??'').trim();
+  const supplierId=s=>String(s?.id??s?.supplierId??s?.supplier_id??'');
+  const supplierFor=p=>{const id=String(p?.supplierId??p?.supplier_id??p?.supplier??p?.proveedorId??'');let s=suppliers().find(x=>supplierId(x)===id);if(!s&&p?.supplierName)s=suppliers().find(x=>norm(supplierName(x))===norm(p.supplierName));return s||null};
+  const stock=p=>Number(p?.stock??p?.quantity??p?.existencia??0)||0;
+  const min=p=>Number(p?.minStock??p?.stockMin??p?.minimumStock??p?.stockMinimum??0)||0;
+  const max=p=>Number(p?.maxStock??p?.stockMax??p?.maximumStock??p?.stockDesired??0)||0;
+
+  function injectProductFields(){
+    const modal=document.querySelector('#modalbox,#modal,.modal');
+    if(!modal||modal.hasAttribute(MARK))return;
+    const form=modal.querySelector('form');
+    if(!form)return;
+    const hasProduct=!!form.querySelector('#f_name,#f_code,#f_price,[name="name"],[name="code"]');
+    if(!hasProduct)return;
+    const host=document.createElement('div');host.setAttribute(MARK,'');host.className='form';host.style.cssText='margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr))';
+    const opts=suppliers().map(s=>`<option value="${esc(supplierId(s))}">${esc(supplierName(s))}</option>`).join('');
+    host.innerHTML=`<div class="field"><label>Proveedor</label><select id="productSupplier"><option value="">Sin proveedor</option>${opts}</select></div><div class="field"><label>Stock mínimo</label><input id="productMinStock" type="number" min="0" step="1" value="0" placeholder="Ej. 5"></div><div class="field"><label>Stock deseado / óptimo</label><input id="productMaxStock" type="number" min="0" step="1" value="0" placeholder="Ej. 20"></div>`;
+    const anchor=form.querySelector('.actions')||form.lastElementChild;form.insertBefore(host,anchor||null);
+    const p=products().find(x=>String(x.id)===String(window._editingProductId??window.editingProductId??window.currentProductId));
+    if(p){document.getElementById('productSupplier').value=String(p.supplierId??p.supplier_id??p.supplier??'');document.getElementById('productMinStock').value=min(p);document.getElementById('productMaxStock').value=max(p)}
+  }
+
+  function patchSave(){
+    ['saveProduct','saveProductForm','saveArticle'].forEach(name=>{
+      const fn=window[name];if(typeof fn!=='function'||fn.__ventaraAlertPatch)return;
+      const wrapped=function(){const r=fn.apply(this,arguments);setTimeout(()=>persistProductFields(),0);return r};wrapped.__ventaraAlertPatch=true;window[name]=wrapped;
+    });
+  }
+  function persistProductFields(){
+    const d=db();if(!d)return;const sid=document.getElementById('productSupplier')?.value;const mn=document.getElementById('productMinStock')?.value;const mx=document.getElementById('productMaxStock')?.value;if(sid===undefined&&mn===undefined&&mx===undefined)return;
+    const code=document.querySelector('#f_code,[name="code"]')?.value?.trim();const name=document.querySelector('#f_name,[name="name"]')?.value?.trim();
+    let p=products().find(x=>String(x.id)===String(window._editingProductId??window.editingProductId??window.currentProductId));if(!p&&code)p=products().find(x=>String(x.code??'').trim()===code);if(!p&&name)p=products().find(x=>norm(x.name)===norm(name));if(!p)return;
+    p.supplierId=sid||'';p.minStock=Math.max(0,Number(mn)||0);p.maxStock=Math.max(0,Number(mx)||0);
+    if(typeof window.save==='function')window.save();if(typeof window.cloudSave==='function')window.cloudSave();
+  }
+
+  function ensureInventoryTab(){
+    const root=document.querySelector('#products');if(!root)return;
+    if(root.querySelector('[data-ventara-alerts-panel]'))return;
+    const head=root.querySelector('.page-head');if(!head)return;
+    const b=document.createElement('button');b.type='button';b.className='btn';b.textContent='⚠️ Alertas de Pedido';b.setAttribute('data-ventara-alerts-btn','');b.addEventListener('click',renderPanel);
+    head.appendChild(b);
+  }
+  function renderPanel(){
+    const root=document.querySelector('#products');if(!root)return;let panel=root.querySelector('[data-ventara-alerts-panel]');if(!panel){panel=document.createElement('div');panel.setAttribute('data-ventara-alerts-panel','');panel.className='card';panel.style.cssText='margin-top:15px';root.appendChild(panel)}
+    const groups={};products().forEach(p=>{if(stock(p)>min(p))return;const s=supplierFor(p);const key=s?supplierId(s):'__none__';(groups[key]??={supplier:s,items:[]}).items.push(p)});
+    const opts=Object.values(groups).map(g=>g.supplier?`<option value="${esc(supplierId(g.supplier))}">${esc(supplierName(g.supplier))}</option>`:'<option value="__none__">Sin proveedor</option>').join('');
+    panel.innerHTML=`<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><div class="field" style="min-width:240px;flex:1"><label>Proveedor</label><select data-alert-supplier><option value="">Todos</option>${opts}</select></div><button class="btn" type="button" data-alert-close>Cerrar</button></div><div data-alert-results style="margin-top:14px"></div>`;
+    panel.querySelector('[data-alert-close]').onclick=()=>panel.remove();panel.querySelector('[data-alert-supplier]').onchange=()=>drawResults(panel,groups);
+    drawResults(panel,groups);
+  }
+  function drawResults(panel,groups){
+    const selected=panel.querySelector('[data-alert-supplier]').value;const gs=Object.values(groups).filter(g=>!selected||supplierId(g.supplier)===selected||(selected==='__none__'&&!g.supplier));
+    const html=gs.map(g=>{const title=g.supplier?supplierName(g.supplier):'Sin proveedor';const rows=g.items.map(p=>{const qty=Math.max(0,max(p)-stock(p));return `<tr><td>${esc(p.name??p.nombre??'')}</td><td>${stock(p)}</td><td>${min(p)}</td><td>${max(p)}</td><td><b>${qty}</b></td></tr>`}).join('');const text=`Hola ${title}, adjunto pedido sugerido:\n`+g.items.map(p=>`- ${p.name??p.nombre??'Artículo'}: ${Math.max(0,max(p)-stock(p))} unidades`).join('\n');return `<div style="margin-bottom:22px"><h3>${esc(title)}</h3><div style="overflow:auto"><table class="table"><thead><tr><th>Producto</th><th>Stock actual</th><th>Mínimo</th><th>Deseado</th><th>Pedir</th></tr></thead><tbody>${rows}</tbody></table></div><button class="btn primary" type="button" data-copy-order="${esc(text)}">📋 Copiar Pedido para WhatsApp / Exportar</button></div>`}).join('');
+    panel.querySelector('[data-alert-results]').innerHTML=html||'<div class="empty">No hay artículos en alerta de pedido.</div>';
+    panel.querySelectorAll('[data-copy-order]').forEach(b=>b.onclick=async()=>{const t=b.getAttribute('data-copy-order')||'';try{await navigator.clipboard.writeText(t);b.textContent='✓ Pedido copiado';setTimeout(()=>b.textContent='📋 Copiar Pedido para WhatsApp / Exportar',1800)}catch(e){window.prompt('Copia el pedido:',t)}});
+  }
+  function sync(){try{injectProductFields();patchSave();ensureInventoryTab()}catch(e){console.warn('[VENTARA] alerts',e)}}
+  new MutationObserver(sync).observe(document.documentElement,{subtree:true,childList:true});setInterval(sync,900);sync();
+})();
