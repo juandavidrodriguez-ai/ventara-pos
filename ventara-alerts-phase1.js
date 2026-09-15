@@ -4,38 +4,47 @@
   const W=window;
   const getDb=()=>{try{return W.db||null}catch(e){return null}};
   const products=()=>{try{const d=getDb();return Array.isArray(d?.products)?d.products:[]}catch(e){return[]}};
-  const suppliers=()=>{try{
+
+  function getSuppliersList(){try{
     const d=getDb();
-    if(Array.isArray(d?.suppliers)&&d.suppliers.length)return d.suppliers;
-    const read=k=>{try{const raw=localStorage.getItem(k);return raw?JSON.parse(raw):null}catch(e){return null}};
-    const a=read('suppliers');if(Array.isArray(a)&&a.length)return a;
-    const b=read('db_suppliers');if(Array.isArray(b)&&b.length)return b;
+    if(Array.isArray(d?.suppliers)&&d.suppliers.length>0)return d.suppliers;
+    const keys=['suppliers','db_suppliers','ventara_suppliers','pos_suppliers','db'];
+    for(const key of keys){
+      try{
+        const data=W.localStorage?.getItem(key);
+        if(!data)continue;
+        const parsed=JSON.parse(data);
+        if(Array.isArray(parsed)&&parsed.length>0)return parsed;
+        if(parsed&&Array.isArray(parsed.suppliers)&&parsed.suppliers.length>0)return parsed.suppliers;
+      }catch(e){console.warn('[VENTARA] storage suppliers',key,e)}
+    }
+  }catch(e){console.error('[VENTARA] Error leyendo proveedores:',e)}
     return [];
-  }catch(e){return[]}};
+  }
+  const suppliers=getSuppliersList;
   const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
-  const supplierIdOf=(s,i)=>String(s?.id??s?.supplierId??s?.codigo??i);
-  const supplierNameOf=(s)=>String(s?.nombre||s?.name||s?.razonSocial||s?.empresa||'Proveedor sin nombre');
+  const supplierIdOf=(s,i)=>String(s?.id??s?.supplierId??s?.codigo??s?._id??i);
+  const supplierNameOf=(s)=>String(s?.nombre||s?.name||s?.razonSocial||s?.empresa||s?.proveedor||s?.nombreComercial||'Proveedor sin nombre');
   const supplierName=id=>{try{const list=suppliers(),s=list.find((x,i)=>supplierIdOf(x,i)===String(id));return s?supplierNameOf(s):'Sin Proveedor'}catch(e){return'Sin Proveedor'}};
   const productModal=()=>{try{return document.getElementById('productModal')||[...document.querySelectorAll('.modalbox')].find(m=>m.querySelector('#f_cat')||m.querySelector('#f_name'))||null}catch(e){return null}};
 
-  function loadSuppliersIntoDropdown(selected){try{
-    const select=document.getElementById('productSupplier');if(!select)return;
+  function syncSupplierDropdown(selected){try{
+    const list=getSuppliersList();
+    const select=document.getElementById('productSupplier');
+    if(!select)return;
     const current=selected!==undefined?String(selected):String(select.value||'');
-    const suppliersList=suppliers();
     select.innerHTML='<option value="">Sin Proveedor</option>';
-    suppliersList.forEach((sup,index)=>{
-      try{
-        const id=sup?.id||sup?.supplierId||sup?.codigo||index;
-        const nombre=sup?.nombre||sup?.name||sup?.razonSocial||sup?.empresa;
-        if(id!==undefined&&id!==null&&String(id)!==''&&nombre){
-          const option=document.createElement('option');
-          option.value=String(id);option.textContent=String(nombre);select.appendChild(option);
-        }
-      }catch(e){console.warn('[VENTARA] supplier item',e)}
-    });
-    select.value=current;
-  }catch(e){console.warn('[VENTARA] load suppliers',e)}}
-  const fillSupplierOptions=loadSuppliersIntoDropdown;
+    list.forEach(s=>{try{
+      const val=s?.id||s?.supplierId||s?._id||s?.codigo||s?.nombre||s?.name||'';
+      const text=s?.nombre||s?.name||s?.razonSocial||s?.empresa||s?.proveedor||s?.nombreComercial||val;
+      if(text){
+        const opt=document.createElement('option');
+        opt.value=String(val);opt.textContent=String(text);select.appendChild(opt);
+      }
+    }catch(e){console.warn('[VENTARA] supplier item',e)}});
+    if(current)select.value=current;
+  }catch(e){console.error('[VENTARA] syncSupplierDropdown',e)}}
+  const loadSuppliersIntoDropdown=syncSupplierDropdown;
 
   function productIdFromModal(){try{
     const m=productModal();
@@ -48,7 +57,7 @@
   function hydrate(){try{
     const id=productIdFromModal(),p=products().find(x=>String(x?.id)===String(id));
     const s=document.getElementById('productSupplier'),mx=document.getElementById('productMaxStock');
-    loadSuppliersIntoDropdown(p?.supplierId??s?.value??'');
+    syncSupplierDropdown(p?.supplierId??s?.value??'');
     if(!p)return;
     if(s)s.value=String(p.supplierId??'');
     if(mx)mx.value=Number.isFinite(+p.stockMax)?p.stockMax:0;
@@ -67,7 +76,7 @@
       const host=min?.closest('.field')||m.querySelector('.form');
       if(host){const wrap=document.createElement('div');wrap.className='field';wrap.dataset.ventaraPhase1='max';wrap.innerHTML='<label>Stock Máximo / Objetivo</label><input id="productMaxStock" class="form-control" type="number" min="0" step="0.001" placeholder="0">';host.insertAdjacentElement('afterend',wrap)}
     }
-    loadSuppliersIntoDropdown();
+    syncSupplierDropdown();
     hydrate();
     attachSaveHook();
     return !!document.getElementById('productSupplier')&&!!document.getElementById('productMaxStock');
@@ -112,18 +121,33 @@
     if(typeof W.openModal==='function')W.openModal(html);else alert(rows.length?rows.map(p=>`${p?.name||'Producto'} — ${p?.supplierName||supplierName(p?.supplierId)} — actual: ${p?.stockActual??p?.stock??0} — mínimo: ${p?.stockMin??p?.min??0} — sugerido: ${Math.max(0,Number(p?.stockMax??0)-Number(p?.stockActual??p?.stock??0))}`).join('\n'):'No hay alertas de stock pendiente.');
   }catch(e){console.warn('[VENTARA] show alerts',e)}}
 
+  function bindProductActionButtons(){try{
+    const root=document.getElementById('products');if(!root)return;
+    root.querySelectorAll('button').forEach(b=>{
+      if(!/nuevo artículo|nuevo articulo|editar/i.test(b.textContent||''))return;
+      if(b.dataset.ventaraPhase1SupplierClick==='1')return;
+      b.dataset.ventaraPhase1SupplierClick='1';
+      b.addEventListener('click',()=>{try{
+        syncSupplierDropdown();
+        setTimeout(()=>{try{syncSupplierDropdown()}catch(e){console.warn('[VENTARA] supplier sync deferred',e)}},0);
+        setTimeout(()=>{try{syncSupplierDropdown()}catch(e){console.warn('[VENTARA] supplier sync late',e)}},80);
+      }catch(e){console.warn('[VENTARA] supplier button',e)} });
+    });
+  }catch(e){console.warn('[VENTARA] bind supplier buttons',e)}}
+
   function afterProductOpen(){try{
-    loadSuppliersIntoDropdown();
-    setTimeout(()=>{try{injectFields();loadSuppliersIntoDropdown()}catch(e){console.warn('[VENTARA] deferred fields',e)}},80);
-    setTimeout(()=>{try{loadSuppliersIntoDropdown()}catch(e){console.warn('[VENTARA] late suppliers',e)}},250);
+    syncSupplierDropdown();
+    setTimeout(()=>{try{injectFields();syncSupplierDropdown()}catch(e){console.warn('[VENTARA] deferred fields',e)}},80);
+    setTimeout(()=>{try{syncSupplierDropdown()}catch(e){console.warn('[VENTARA] late suppliers',e)}},250);
   }catch(e){console.warn('[VENTARA] after open',e)}}
   function wireRoot(){try{const root=document.getElementById('products');if(!root||root.dataset.ventaraPhase1Root==='1')return;root.dataset.ventaraPhase1Root='1';root.addEventListener('click',e=>{try{
     const b=e.target?.closest?.('button');
-    if(b&&/nuevo artículo|nuevo articulo|editar/i.test(b.textContent||''))afterProductOpen();
-    setTimeout(()=>{try{injectButton()}catch(err){console.warn('[VENTARA] deferred button',err)}},120);
-  }catch(err){console.warn('[VENTARA] products listener',err)}})}catch(e){console.warn('[VENTARA] wire root',e)}}
-  function wireNav(){try{document.querySelectorAll('.nav[data-page="products"],.nav[data-page="inventory"]').forEach(b=>{if(b.dataset.ventaraPhase1Nav==='1')return;b.dataset.ventaraPhase1Nav='1';b.addEventListener('click',()=>setTimeout(()=>{try{injectButton()}catch(e){console.warn('[VENTARA] nav button',e)}},250))})}catch(e){console.warn('[VENTARA] wire nav',e)}}
-  function boot(){try{wireRoot();wireNav();injectButton();if(productModal())injectFields()}catch(e){console.warn('[VENTARA] phase1 boot',e)}}
+    if(b&&/nuevo artículo|nuevo articulo|editar/i.test(b.textContent||'')){afterProductOpen();syncSupplierDropdown()}
+    bindProductActionButtons();
+    setTimeout(()=>{try{injectButton();bindProductActionButtons()}catch(err){console.warn('[VENTARA] deferred product hooks',err)}},120);
+  }catch(err){console.warn('[VENTARA] products listener',err)}});bindProductActionButtons()}catch(e){console.warn('[VENTARA] wire root',e)}}
+  function wireNav(){try{document.querySelectorAll('.nav[data-page="products"],.nav[data-page="inventory"]').forEach(b=>{if(b.dataset.ventaraPhase1Nav==='1')return;b.dataset.ventaraPhase1Nav='1';b.addEventListener('click',()=>setTimeout(()=>{try{injectButton();bindProductActionButtons()}catch(e){console.warn('[VENTARA] nav button',e)}},250))})}catch(e){console.warn('[VENTARA] wire nav',e)}}
+  function boot(){try{wireRoot();wireNav();injectButton();bindProductActionButtons();if(productModal())injectFields()}catch(e){console.warn('[VENTARA] phase1 boot',e)}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,900),{once:true});else setTimeout(boot,900);
-  W.ventaraPhase1={refresh:boot,consult:showAlerts,loadSuppliersIntoDropdown};
+  W.ventaraPhase1={refresh:boot,consult:showAlerts,loadSuppliersIntoDropdown:syncSupplierDropdown,getSuppliersList};
 })();
