@@ -3,7 +3,7 @@
   'use strict';
   const W=window;
   const getDb=()=>{try{return W.db||null}catch(e){return null}};
-  const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
   const suppliers=()=>{try{const d=getDb();return Array.isArray(d?.suppliers)?d.suppliers:[]}catch(e){return[]}};
   const products=()=>{try{const d=getDb();return Array.isArray(d?.products)?d.products:[]}catch(e){return[]}};
   const supplierName=id=>{try{const s=suppliers().find(x=>String(x?.id)===String(id));return String(s?.name||s?.businessName||s?.razonSocial||s?.company||'Sin Proveedor')}catch(e){return'Sin Proveedor'}};
@@ -95,12 +95,14 @@
 
   function injectButton(){try{
     const root=document.getElementById('products');
-    if(!root||document.getElementById('ventaraPhase1AlertsBtn'))return false;
+    if(!root)return false;
+    const current=document.getElementById('ventaraPhase1AlertsBtn');
+    if(current){if(!root.contains(current))current.remove();else return true}
     const b=document.createElement('button');
-    b.id='ventaraPhase1AlertsBtn';b.type='button';b.className='btn';b.textContent='🔔 Consultar Alertas';
+    b.id='ventaraPhase1AlertsBtn';b.type='button';b.className='btn warn';b.textContent='🔔 Consultar Alertas';
     b.addEventListener('click',showAlerts);
-    const head=root.querySelector('.actions');
-    (head||root.firstElementChild||root).appendChild(b);
+    const head=root.querySelector('.head .actions')||root.querySelector('.actions');
+    if(head)head.appendChild(b);else root.appendChild(b);
     return true;
   }catch(e){console.warn('[VENTARA] phase1 button',e);return false}}
 
@@ -112,20 +114,32 @@
     });
     const body=rows.length?rows.map(p=>{
       const stock=Number(p?.stockActual??p?.stock??0),min=Number(p?.stockMin??p?.min||0),max=Math.max(Number(p?.stockMax||0),min),qty=Math.max(0,max-stock),name=String(p?.name||p?.description||'Producto sin nombre'),prov=supplierName(p?.supplierId);
-      return `<tr><td><b>${esc(name)}</b><br><span class="muted">⚠️ Quedan ${stock} unidades de ${esc(name)}.</span></td><td>${esc(prov)}</td><td>${stock} / ${min}</td><td><b>${qty}</b></td></tr>`;
+      return `<tr><td><b>${esc(name)}</b><br><span class="muted">⚠️ Alerta: Quedan ${stock} unidades de ${esc(name)}.</span></td><td>${esc(prov)}</td><td>${stock} / ${min}</td><td><b>${qty}</b></td></tr>`;
     }).join(''):`<tr><td colspan="4" class="empty">✅ No hay artículos por debajo del stock mínimo configurado.</td></tr>`;
     const html=`<h2>🔔 Alertas de Stock</h2><p class="muted">Consulta realizada bajo demanda. El cálculo solo se ejecuta al pulsar este botón.</p><table class="table"><thead><tr><th>Producto</th><th>Proveedor</th><th>Actual / Mínimo</th><th>Sugerido a pedir</th></tr></thead><tbody>${body}</tbody></table><div class="actions" style="margin-top:15px"><button class="btn" type="button" onclick="window.closeModal()">Cerrar</button></div>`;
-    if(typeof W.openModal==='function')W.openModal(html);else alert(rows.length?rows.map(p=>`${p?.name||'Producto'} — ${supplierName(p?.supplierId)} — ${p?.stockActual??p?.stock??0} unidades`).join('\n'):'No hay alertas');
+    if(typeof W.openModal==='function')W.openModal(html);else alert(rows.length?rows.map(p=>`⚠️ Alerta: Quedan ${p?.stockActual??p?.stock??0} unidades de ${p?.name||'Producto'}. Proveedor: ${supplierName(p?.supplierId)}. Cantidad sugerida a pedir: ${Math.max(0,Math.max(Number(p?.stockMax||0),Number(p?.stockMin??p?.min||0))-(Number(p?.stockActual??p?.stock??0)))} unidades.`).join('\n'):'No hay alertas');
   }catch(e){console.warn('[VENTARA] phase1 alerts',e)}}
 
   function wireProductsRoot(){try{
     const root=document.getElementById('products');
     if(!root||root.dataset.ventaraPhase1Root==='1')return;
     root.dataset.ventaraPhase1Root='1';
-    root.addEventListener('click',()=>setTimeout(()=>{try{addFields();injectButton()}catch(e){console.warn('[VENTARA] phase1 deferred',e)}},120));
+    root.addEventListener('click',(e)=>setTimeout(()=>{try{
+      const t=e?.target?.closest?.('button');
+      if(t&&/nuevo artículo|nuevo articulo/i.test(t.textContent||''))addFields();
+      injectButton();
+    }catch(err){console.warn('[VENTARA] phase1 deferred',err)}},120));
   }catch(e){console.warn('[VENTARA] phase1 root',e)}}
 
-  function boot(){try{wireProductsRoot();addFields();injectButton()}catch(e){console.warn('[VENTARA] phase1 boot',e)}}
+  function wireProductsNav(){try{
+    document.querySelectorAll('.nav[data-page="products"], .nav[data-page="inventory"]').forEach(b=>{
+      if(b.dataset.ventaraPhase1Nav==='1')return;
+      b.dataset.ventaraPhase1Nav='1';
+      b.addEventListener('click',()=>setTimeout(()=>{try{injectButton()}catch(e){console.warn('[VENTARA] phase1 nav',e)}},180));
+    });
+  }catch(e){console.warn('[VENTARA] phase1 nav wire',e)}}
+
+  function boot(){try{wireProductsRoot();wireProductsNav();injectButton();addFields()}catch(e){console.warn('[VENTARA] phase1 boot',e)}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,900),{once:true});else setTimeout(boot,900);
   W.ventaraPhase1={refresh:boot,consult:showAlerts};
 })();
