@@ -31,6 +31,18 @@
     }catch(e){}});
   }catch(e){console.warn('[VENTARA] bind product buttons',e)}}
 
+  function bindProductsRoot(){try{
+    const root=document.getElementById('products');
+    if(!root||root.dataset.ventaraSupplierRoot==='1')return;
+    root.dataset.ventaraSupplierRoot='1';
+    root.addEventListener('click',e=>{try{
+      const btn=e.target?.closest?.('button');
+      if(!btn||!root.contains(btn))return;
+      const text=(btn.textContent||'').replace(/\s+/g,' ').trim();
+      if(/^(\+\s*)?Nuevo artículo$/i.test(text)||/^Editar$/i.test(text))populateSupplierSelectOnce();
+    }catch(err){console.warn('[VENTARA] supplier product click',err)}});
+  }catch(e){console.warn('[VENTARA] bind products root',e)}}
+
   function injectDeleteButtons(){try{
     const root=document.getElementById('suppliers');
     if(!root)return;
@@ -81,7 +93,7 @@
     injectDeleteButtons();
   }catch(e){console.warn('[VENTARA] bind supplier table',e)}}
 
-  function boot(){try{bindDirectProductButtons();bindSupplierTable()}catch(e){console.warn('[VENTARA] supplier boot',e)}}
+  function boot(){try{bindDirectProductButtons();bindProductsRoot();bindSupplierTable()}catch(e){console.warn('[VENTARA] supplier boot',e)}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,1000),{once:true});
   else setTimeout(boot,1000);
 
