@@ -8,7 +8,11 @@
   function getSuppliersList(){try{
     const d=getDb();
     if(Array.isArray(d?.suppliers)&&d.suppliers.length>0)return d.suppliers;
-    const keys=['suppliers','db_suppliers','ventara_suppliers','pos_suppliers','db'];
+    try{
+      const stored=W.localStorage?.getItem('db_suppliers');
+      if(stored){const parsed=JSON.parse(stored);if(Array.isArray(parsed))return parsed;if(parsed&&Array.isArray(parsed.suppliers))return parsed.suppliers;}
+    }catch(e){console.warn('[VENTARA] storage db_suppliers',e)}
+    const keys=['suppliers','ventara_suppliers','pos_suppliers','db'];
     for(const key of keys){
       try{
         const data=W.localStorage?.getItem(key);
@@ -57,10 +61,8 @@
   function hydrate(){try{
     const id=productIdFromModal(),p=products().find(x=>String(x?.id)===String(id));
     const s=document.getElementById('productSupplier'),mx=document.getElementById('productMaxStock');
-    syncSupplierDropdown(p?.supplierId??s?.value??'');
-    if(!p)return;
-    if(s)s.value=String(p.supplierId??'');
-    if(mx)mx.value=Number.isFinite(+p.stockMax)?p.stockMax:0;
+    if(p&&s)s.value=String(p.supplierId??'');
+    if(p&&mx)mx.value=Number.isFinite(+p.stockMax)?p.stockMax:0;
   }catch(e){console.warn('[VENTARA] hydrate',e)}}
 
   function injectFields(){try{
@@ -68,15 +70,28 @@
     const category=document.getElementById('f_cat');
     const min=document.getElementById('f_min');
     if(!category&&!min)return false;
+    const currentId=productIdFromModal();
+    const currentProduct=products().find(x=>String(x?.id)===String(currentId));
+    const currentSuppliers=(W.db&&Array.isArray(W.db.suppliers))?W.db.suppliers:(()=>{try{const parsed=JSON.parse(W.localStorage?.getItem('db_suppliers')||'[]');return Array.isArray(parsed)?parsed:(Array.isArray(parsed?.suppliers)?parsed.suppliers:[])}catch(e){return[]}})();
+    let optionsHTML='<option value="">Sin Proveedor</option>';
+    currentSuppliers.forEach(s=>{try{
+      const id=s?.id||s?.supplierId||s?.nit||s?.nombre;
+      const name=s?.nombre||s?.razonSocial||s?.name||s?.empresa;
+      if(name)optionsHTML+=`<option value="${esc(id??'')}">${esc(name)}</option>`;
+    }catch(e){console.warn('[VENTARA] supplier html option',e)}});
     if(!document.getElementById('productSupplier')){
       const host=category?.closest('.field')||m.querySelector('.form');
-      if(host){const wrap=document.createElement('div');wrap.className='field';wrap.dataset.ventaraPhase1='supplier';wrap.innerHTML='<label>Proveedor</label><select id="productSupplier" class="form-control"><option value="">Sin Proveedor</option></select>';host.insertAdjacentElement('afterend',wrap)}
+      if(host){const wrap=document.createElement('div');wrap.className='field';wrap.dataset.ventaraPhase1='supplier';wrap.innerHTML=`<label>Proveedor</label><select id="productSupplier" class="form-control">${optionsHTML}</select>`;host.insertAdjacentElement('afterend',wrap)}
+    }else{
+      const select=document.getElementById('productSupplier');
+      if(select)select.innerHTML=optionsHTML;
     }
+    const supplierSelect=document.getElementById('productSupplier');
+    if(supplierSelect&&currentProduct)supplierSelect.value=String(currentProduct.supplierId??'');
     if(!document.getElementById('productMaxStock')){
       const host=min?.closest('.field')||m.querySelector('.form');
       if(host){const wrap=document.createElement('div');wrap.className='field';wrap.dataset.ventaraPhase1='max';wrap.innerHTML='<label>Stock Máximo / Objetivo</label><input id="productMaxStock" class="form-control" type="number" min="0" step="0.001" placeholder="0">';host.insertAdjacentElement('afterend',wrap)}
     }
-    syncSupplierDropdown();
     hydrate();
     attachSaveHook();
     return !!document.getElementById('productSupplier')&&!!document.getElementById('productMaxStock');
@@ -127,22 +142,14 @@
       if(!/nuevo artículo|nuevo articulo|editar/i.test(b.textContent||''))return;
       if(b.dataset.ventaraPhase1SupplierClick==='1')return;
       b.dataset.ventaraPhase1SupplierClick='1';
-      b.addEventListener('click',()=>{try{
-        syncSupplierDropdown();
-        setTimeout(()=>{try{syncSupplierDropdown()}catch(e){console.warn('[VENTARA] supplier sync deferred',e)}},0);
-        setTimeout(()=>{try{syncSupplierDropdown()}catch(e){console.warn('[VENTARA] supplier sync late',e)}},80);
-      }catch(e){console.warn('[VENTARA] supplier button',e)} });
+      b.addEventListener('click',()=>{try{injectFields()}catch(e){console.warn('[VENTARA] supplier button',e)} });
     });
   }catch(e){console.warn('[VENTARA] bind supplier buttons',e)}}
 
-  function afterProductOpen(){try{
-    syncSupplierDropdown();
-    setTimeout(()=>{try{injectFields();syncSupplierDropdown()}catch(e){console.warn('[VENTARA] deferred fields',e)}},80);
-    setTimeout(()=>{try{syncSupplierDropdown()}catch(e){console.warn('[VENTARA] late suppliers',e)}},250);
-  }catch(e){console.warn('[VENTARA] after open',e)}}
+  function afterProductOpen(){try{injectFields()}catch(e){console.warn('[VENTARA] after open',e)}}
   function wireRoot(){try{const root=document.getElementById('products');if(!root||root.dataset.ventaraPhase1Root==='1')return;root.dataset.ventaraPhase1Root='1';root.addEventListener('click',e=>{try{
     const b=e.target?.closest?.('button');
-    if(b&&/nuevo artículo|nuevo articulo|editar/i.test(b.textContent||'')){afterProductOpen();syncSupplierDropdown()}
+    if(b&&/nuevo artículo|nuevo articulo|editar/i.test(b.textContent||'')){afterProductOpen()}
     bindProductActionButtons();
     setTimeout(()=>{try{injectButton();bindProductActionButtons()}catch(err){console.warn('[VENTARA] deferred product hooks',err)}},120);
   }catch(err){console.warn('[VENTARA] products listener',err)}});bindProductActionButtons()}catch(e){console.warn('[VENTARA] wire root',e)}}
