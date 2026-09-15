@@ -11,7 +11,10 @@
       const id=s?.id||s?.supplierId||s?.nit||s?.nombre||'';
       const name=s?.nombre||s?.razonSocial||s?.name||'';
       if(!name)return;
-      select.innerHTML+=`<option value="${String(id).replace(/"/g,'&quot;')}">${String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</option>`;
+      const opt=document.createElement('option');
+      opt.value=String(id).replace(/"/g,'&quot;');
+      opt.textContent=String(name);
+      select.appendChild(opt);
     }catch(e){console.warn('[VENTARA] supplier option',e)}});
   }catch(e){console.warn('[VENTARA] populate suppliers',e)}}
 
@@ -55,11 +58,6 @@
     }catch(e){}});
   }catch(e){console.warn('[VENTARA] inject delete',e)}}
 
-  function refreshSupplierTable(){try{
-    if(typeof window.renderSuppliers==='function')window.renderSuppliers();
-    else injectDeleteButtons();
-  }catch(e){console.warn('[VENTARA] refresh supplier table',e);injectDeleteButtons()}}
-
   function deleteSupplier(id){try{
     const suppliers=(window.db&&Array.isArray(window.db.suppliers))?window.db.suppliers:null;
     if(!suppliers)return;
@@ -71,7 +69,7 @@
     suppliers.splice(index,1);
     try{if(typeof window.save==='function')window.save()}catch(e){console.warn('[VENTARA] supplier save',e)}
     try{if(typeof window.cloudSave==='function')Promise.resolve(window.cloudSave()).catch(e=>console.warn('[VENTARA] supplier cloud save',e))}catch(e){console.warn('[VENTARA] supplier cloud save',e)}
-    refreshSupplierTable();
+    try{if(typeof window.renderSuppliers==='function')window.renderSuppliers();else injectDeleteButtons()}catch(e){console.warn('[VENTARA] supplier table refresh',e);injectDeleteButtons()}
   }catch(e){console.warn('[VENTARA] delete supplier',e)}}
 
   function bindSupplierTable(){try{
@@ -88,12 +86,7 @@
     injectDeleteButtons();
   }catch(e){console.warn('[VENTARA] bind supplier table',e)}}
 
-  function boot(){try{
-    bindNewProduct();
-    bindEditButtons();
-    bindSupplierTable();
-  }catch(e){console.warn('[VENTARA] supplier boot',e)}}
-
+  function boot(){try{bindNewProduct();bindEditButtons();bindSupplierTable()}catch(e){console.warn('[VENTARA] supplier boot',e)}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,1000),{once:true});
   else setTimeout(boot,1000);
 
