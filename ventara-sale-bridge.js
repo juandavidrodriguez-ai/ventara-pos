@@ -1,3 +1,4 @@
+// VENTARA deployment sync: keep the surgical sales filter in the active Vercel project.
 (()=>{
   try{
     Object.defineProperty(window,'db',{configurable:true,get:()=>typeof db!=='undefined'?db:null,set:v=>{if(typeof db!=='undefined')db=v}});
