@@ -21,7 +21,7 @@
 
 /* Los parches funcionales no forman parte del arranque ni de la autenticación. */
 (()=>{
-  const modules=['ventara-payment-options.js','ventara-sales-filter.js','ventara-suppliers-patch.js','ventara-clients-quotes-filter.js','ventara-alerts-suppliers.js','ventara-global-filters-patch.js','ventara-core-modules-search.js'];
+  const modules=['ventara-payment-options.js','ventara-sales-filter.js','ventara-suppliers-patch.js','ventara-clients-quotes-filter.js','ventara-global-filters-patch.js','ventara-core-modules-search.js'];
   const load=src=>{try{if(document.querySelector(`script[src="${src}"]`))return;const s=document.createElement('script');s.src=src;s.defer=true;s.async=false;document.head.appendChild(s)}catch(e){console.warn('[VENTARA] module load',src,e)}};
   const loadAll=()=>modules.forEach(load);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(loadAll,1500),{once:true});
