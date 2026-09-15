@@ -91,7 +91,19 @@
     injectDeleteButtons();
   }catch(e){console.warn('[VENTARA] bind supplier table',e)}}
 
-  function boot(){try{bindDirectProductButtons();bindProductsRoot();bindSupplierTable()}catch(e){console.warn('[VENTARA] supplier boot',e)}}
+  function bindSupplierRender(){try{
+    if(typeof window.renderSuppliers!=='function'||window.renderSuppliers.__ventaraSupplierDelete)return;
+    const original=window.renderSuppliers;
+    const wrapped=function(){
+      const result=original.apply(this,arguments);
+      try{setTimeout(injectDeleteButtons,0)}catch(e){console.warn('[VENTARA] supplier redraw',e)}
+      return result;
+    };
+    wrapped.__ventaraSupplierDelete=true;
+    window.renderSuppliers=wrapped;
+  }catch(e){console.warn('[VENTARA] supplier render hook',e)}}
+
+  function boot(){try{bindDirectProductButtons();bindProductsRoot();bindSupplierTable();bindSupplierRender()}catch(e){console.warn('[VENTARA] supplier boot',e)}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,1000),{once:true});
   else setTimeout(boot,1000);
 
