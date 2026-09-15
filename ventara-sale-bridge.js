@@ -8,4 +8,8 @@
   s.src='/ventara-sale-safe-v2.js';
   s.defer=false;
   document.head.appendChild(s);
+  const f=document.createElement('script');
+  f.src='/ventara-sales-filter.js';
+  f.defer=false;
+  document.head.appendChild(f);
 })();
