@@ -22,7 +22,7 @@
 /* Los parches funcionales no forman parte del arranque ni de la autenticación. */
 (()=>{
   'use strict';
-  const modules=['ventara-payment-options.js','ventara-sales-filter.js','ventara-suppliers-patch.js','ventara-clients-quotes-filter.js','ventara-global-filters-patch.js','ventara-core-modules-search.js','ventara-alerts-phase1.js','ventara-supplier-force.js','ventara-supplier-definitive-fix.js?v=20260915-2'];
+  const modules=['ventara-payment-options.js','ventara-sales-filter.js','ventara-suppliers-patch.js','ventara-clients-quotes-filter.js','ventara-global-filters-patch.js','ventara-core-modules-search.js','ventara-alerts-phase1.js','ventara-supplier-force.js','ventara-supplier-definitive-fix.js?v=20260915-2','ventara-orders-evolution.js'];
   const load=src=>{try{const base=src.split('?')[0];if(document.querySelector(`script[src="${src}"],script[src^="${base}?"]`))return;const s=document.createElement('script');s.src=src;s.defer=true;s.async=false;document.head.appendChild(s)}catch(e){console.warn('[VENTARA] module load',src,e)}};
   const loadAll=()=>{try{modules.forEach(load)}catch(e){console.warn('[VENTARA] module batch',e)}};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(loadAll,1500),{once:true});else setTimeout(loadAll,1500);
