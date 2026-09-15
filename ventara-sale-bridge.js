@@ -1,4 +1,4 @@
-// VENTARA deployment sync: keep the surgical sales filter in the active Vercel project.
+// VENTARA deployment sync: keep the surgical sales/suppliers filters in the active Vercel project.
 (()=>{
   try{
     Object.defineProperty(window,'db',{configurable:true,get:()=>typeof db!=='undefined'?db:null,set:v=>{if(typeof db!=='undefined')db=v}});
@@ -13,4 +13,8 @@
   f.src='/ventara-sales-filter.js';
   f.defer=false;
   document.head.appendChild(f);
+  const p=document.createElement('script');
+  p.src='/ventara-suppliers-patch.js';
+  p.defer=false;
+  document.head.appendChild(p);
 })();
