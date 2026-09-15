@@ -26,11 +26,10 @@
 
   function hydrate(){try{
     const p=products().find(x=>String(x?.id)===String(productIdFromModal()));
-    const s=document.getElementById('productSupplier'),mn=document.getElementById('productMinStock'),mx=document.getElementById('productMaxStock');
+    const s=document.getElementById('productSupplier'),mx=document.getElementById('productMaxStock');
     fillSupplierOptions(p?.supplierId??s?.value??'');
     if(!p)return;
     if(s)s.value=p.supplierId??'';
-    if(mn)mn.value=Number.isFinite(+(p.stockMin??p.min))?(p.stockMin??p.min):0;
     if(mx)mx.value=Number.isFinite(+p.stockMax)?p.stockMax:0;
   }catch(e){console.warn('[VENTARA] hydrate',e)}}
 
@@ -58,22 +57,46 @@
         host.insertAdjacentElement('afterend',wrap);
       }
     }
-
-    const visualMin=document.getElementById('productMinStock');
-    if(!visualMin&&min){
-      const wrap=document.createElement('div');wrap.className='field';wrap.dataset.ventaraPhase1='min';
-      wrap.innerHTML='<label>Stock Mínimo para alerta</label><input id="productMinStock" class="form-control" type="number" min="0" step="0.001" placeholder="0">';
-      min.closest('.field')?.insertAdjacentElement('afterend',wrap);
-      const v=document.getElementById('productMinStock');if(v)v.value=min.value||'0';
-    }
     hydrate();
+    attachSaveHook();
     return !!document.getElementById('productSupplier')&&!!document.getElementById('productMaxStock');
   }catch(e){console.warn('[VENTARA] inject fields',e);return false}}
+
+  function attachSaveHook(){try{
+    const m=productModal();
+    const b=[...(m?.querySelectorAll('.actions button')||[])].find(x=>/guardar/i.test(x.textContent||''));
+    if(!m||!b||b.dataset.ventaraPhase1Save==='1')return;
+    b.dataset.ventaraPhase1Save='1';
+    b.addEventListener('click',()=>{try{
+      const id=productIdFromModal();
+      const code=document.getElementById('f_code')?.value||'';
+      const name=document.getElementById('f_name')?.value||'';
+      const supplierId=document.getElementById('productSupplier')?.value||'';
+      const min=Number(document.getElementById('f_min')?.value||0);
+      const max=Number(document.getElementById('productMaxStock')?.value||0);
+      setTimeout(()=>persistAfterNativeSave({id,code,name,supplierId,min,max}),350);
+    }catch(e){console.warn('[VENTARA] save hook',e)}
+    },{capture:true});
+  }catch(e){console.warn('[VENTARA] attach save',e)}}
+
+  function persistAfterNativeSave(x){try{
+    const d=getDb();if(!d||!Array.isArray(d.products))return;
+    let p=x.id?d.products.find(v=>String(v?.id)===String(x.id)):null;
+    if(!p&&x.code)p=d.products.find(v=>String(v?.code||'')===String(x.code));
+    if(!p&&x.name)p=d.products.find(v=>String(v?.name||'').trim()===String(x.name).trim());
+    if(!p)return;
+    p.supplierId=x.supplierId||'';
+    p.stockMin=Number.isFinite(x.min)&&x.min>0?x.min:0;
+    p.stockMax=Number.isFinite(x.max)&&x.max>0?x.max:0;
+    p.min=p.stockMin;
+    if(typeof W.save==='function')W.save();
+    if(typeof W.cloudSave==='function')Promise.resolve(W.cloudSave()).catch(e=>console.warn('[VENTARA] cloud save',e));
+  }catch(e){console.warn('[VENTARA] persistence',e)}}
 
   function injectButton(){try{
     const root=document.getElementById('products');if(!root)return false;
     document.getElementById('ventaraPhase1AlertsBtn')?.remove();
-    const old=document.getElementById('btnConsultAlerts');if(old)old.remove();
+    document.getElementById('btnConsultAlerts')?.remove();
     const b=document.createElement('button');
     b.id='btnConsultAlerts';b.type='button';b.className='btn btn-warning';b.textContent='🔔 Consultar Alertas';
     b.addEventListener('click',()=>{try{showAlerts()}catch(e){console.warn('[VENTARA] alerts click',e)}});
