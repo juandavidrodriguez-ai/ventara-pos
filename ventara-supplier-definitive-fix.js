@@ -2,9 +2,10 @@
 (()=>{
   'use strict';
 
-  function populateSuppliersOnce(){try{
+  function populateSupplierSelectOnce(){try{
     const select=document.getElementById('productSupplier');
     if(!select)return;
+    if(select.children.length>1)return;
     const suppliers=(window.db&&Array.isArray(window.db.suppliers))?window.db.suppliers:[];
     select.innerHTML='<option value="">Sin Proveedor</option>';
     suppliers.forEach(s=>{try{
@@ -12,29 +13,23 @@
       const name=s?.nombre||s?.razonSocial||s?.name||'';
       if(!name)return;
       const opt=document.createElement('option');
-      opt.value=String(id).replace(/"/g,'&quot;');
+      opt.value=String(id);
       opt.textContent=String(name);
       select.appendChild(opt);
     }catch(e){console.warn('[VENTARA] supplier option',e)}});
   }catch(e){console.warn('[VENTARA] populate suppliers',e)}}
 
-  function bindNewProduct(){try{
-    const btn=document.getElementById('btnNewProduct')||document.querySelector('[data-target="#productModal"]');
-    if(!btn||btn.dataset.ventaraSupplierSync==='1')return;
-    btn.dataset.ventaraSupplierSync='1';
-    btn.addEventListener('click',()=>{try{populateSuppliersOnce()}catch(e){console.warn('[VENTARA] supplier click',e)}},{passive:true});
-  }catch(e){console.warn('[VENTARA] bind new product',e)}}
-
-  function bindEditButtons(){try{
+  function bindDirectProductButtons(){try{
     const root=document.getElementById('products');
     if(!root)return;
     root.querySelectorAll('button').forEach(btn=>{try{
       const text=(btn.textContent||'').replace(/\s+/g,' ').trim();
-      if(!/^editar$/i.test(text)||btn.dataset.ventaraSupplierSync==='1')return;
-      btn.dataset.ventaraSupplierSync='1';
-      btn.addEventListener('click',()=>{try{populateSuppliersOnce()}catch(e){console.warn('[VENTARA] supplier edit',e)}},{passive:true});
+      if(!/^(\+\s*)?Nuevo artículo$/i.test(text)&&!/^Editar$/i.test(text))return;
+      if(btn.dataset.ventaraSupplierOnce==='1')return;
+      btn.dataset.ventaraSupplierOnce='1';
+      btn.addEventListener('click',()=>{try{populateSupplierSelectOnce()}catch(e){console.warn('[VENTARA] supplier direct click',e)}},{passive:true});
     }catch(e){}});
-  }catch(e){console.warn('[VENTARA] bind edit buttons',e)}}
+  }catch(e){console.warn('[VENTARA] bind product buttons',e)}}
 
   function injectDeleteButtons(){try{
     const root=document.getElementById('suppliers');
@@ -86,11 +81,12 @@
     injectDeleteButtons();
   }catch(e){console.warn('[VENTARA] bind supplier table',e)}}
 
-  function boot(){try{bindNewProduct();bindEditButtons();bindSupplierTable()}catch(e){console.warn('[VENTARA] supplier boot',e)}}
+  function boot(){try{bindDirectProductButtons();bindSupplierTable()}catch(e){console.warn('[VENTARA] supplier boot',e)}}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,1000),{once:true});
   else setTimeout(boot,1000);
 
-  window.populateSuppliersOnce=populateSuppliersOnce;
-  window.syncSuppliersDropdown=populateSuppliersOnce;
-  window.ventaraSupplierDefinitive={populateSuppliersOnce,deleteSupplier,injectDeleteButtons,refresh:boot};
+  window.populateSupplierSelectOnce=populateSupplierSelectOnce;
+  window.populateSuppliersOnce=populateSupplierSelectOnce;
+  window.syncSuppliersDropdown=populateSupplierSelectOnce;
+  window.ventaraSupplierDefinitive={populateSupplierSelectOnce,deleteSupplier,injectDeleteButtons,refresh:boot};
 })();
