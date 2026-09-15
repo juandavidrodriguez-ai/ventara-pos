@@ -1,0 +1,39 @@
+/* VENTARA POS — Buscadores quirúrgicos para Pedidos, Artículos, Compras y Fiado/Crédito.
+   Solo cambia display de filas. No modifica db.*, cobro/caja ni acciones. */
+(()=>{
+'use strict';
+const MARK='data-ventara-core-search',EMPTY='data-ventara-core-empty';
+const STYLE='display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:0 0 12px;padding:12px;border:1px solid #ddd;border-radius:8px';
+const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+const text=el=>{try{return norm(el?.innerText||el?.textContent||'')}catch(e){return ''}};
+const visible=el=>{try{return !!(el.offsetWidth||el.offsetHeight||el.getClientRects().length)}catch(e){return false}};
+const configs=[
+ {key:'orders',ids:['orders','pedidos','ordersPage'],terms:['pedidos','pedido'],placeholder:'Pedido, factura, referencia, cédula, NIT o cliente',quick:'order-status',status:['Todos','Pendiente','Completado','Cancelado']},
+ {key:'articles',ids:['products','articles','inventory','articulos'],terms:['artículos','articulos','inventario','productos'],placeholder:'Código de barras, SKU, nombre, categoría, marca o proveedor',quick:'stock'},
+ {key:'purchases',ids:['purchases','compras','purchase'],terms:['compras','compra'],placeholder:'Compra, factura de proveedor, orden, proveedor, NIT o cédula',quick:'date'},
+ {key:'credit',ids:['credit','credits','fiado','cartera','accountsReceivable'],terms:['fiado','crédito','credito','cartera','cuentas por cobrar'],placeholder:'Cédula, NIT, cliente, razón social o factura/crédito',quick:'credit-status',status:['Todos','Pendientes / Morosos','Al Día / Cancelados']}
+];
+function findRoot(cfg){try{
+ const byId=cfg.ids.map(id=>document.getElementById(id)).find(visible);
+ if(byId&&byId.querySelector('table'))return byId;
+ const tables=[...document.querySelectorAll('table')].filter(visible);let best=null,scoreBest=0;
+ for(const t of tables){let p=t.parentElement,score=0,depth=0;while(p&&depth<6){const tx=text(p),id=norm(p.id||'');for(const term of cfg.terms){const n=norm(term);if(tx.includes(n))score+=4;if(id===n||id.includes(n))score+=12}if(score>scoreBest){scoreBest=score;best=p}p=p.parentElement;depth++}}
+ return scoreBest>=4?best:null;
+}catch(e){console.error('[VENTARA] localizar '+cfg.key,e);return null}}
+function makeControls(cfg){try{const b=document.createElement('div');b.setAttribute(MARK,cfg.key);b.style.cssText=STYLE;let extra='';
+ if(cfg.quick==='order-status')extra='<label><span>Estado</span><select data-vcs-status style="display:block"><option value="todos">Todos</option><option value="pendiente">Pendiente</option><option value="completado">Completado</option><option value="cancelado">Cancelado</option></select></label>';
+ if(cfg.quick==='stock')extra='<label><span>Stock</span><select data-vcs-stock style="display:block"><option value="todos">Todos</option><option value="bajo">Bajo Stock</option><option value="sin">Sin Stock</option></select></label>';
+ if(cfg.quick==='date')extra='<label><span>Fecha</span><input type="date" data-vcs-date style="display:block"></label>';
+ if(cfg.quick==='credit-status')extra='<label><span>Estado</span><select data-vcs-status style="display:block"><option value="todos">Todos</option><option value="pendientes / morosos">Pendientes / Morosos</option><option value="al día / cancelados">Al Día / Cancelados</option></select></label>';
+ b.innerHTML='<label style="flex:1;min-width:220px"><span>🔎 Buscar</span><input type="search" data-vcs-q autocomplete="off" placeholder="'+cfg.placeholder+'" style="display:block;width:100%;box-sizing:border-box"></label>'+extra+'<button type="button" data-vcs-clear class="btn sm">Limpiar Filtros</button>';return b;
+}catch(e){console.error('[VENTARA] controles '+cfg.key,e);return null}}
+function stockMatch(tr,mode){try{if(mode==='todos')return true;const tx=text(tr);if(mode==='sin')return tx.includes('sin stock')||/\b0(?:[.,]0+)?\s*(?:unid|uds|unidad|stock)?\b/.test(tx);if(mode==='bajo')return tx.includes('bajo stock')||tx.includes('bajo')||/\b(?:[1-5])(?:[.,]0+)?\s*(?:unid|uds|unidad|stock)?\b/.test(tx);return true}catch(e){return true}}
+function statusMatch(tr,cfg,value){try{if(value==='todos')return true;const tx=text(tr);if(cfg.key==='orders')return tx.includes(value);if(cfg.key==='credit'){if(value==='pendientes / morosos')return tx.includes('pendiente')||tx.includes('moroso')||tx.includes('vencid')||tx.includes('debe');if(value==='al día / cancelados')return tx.includes('al dia')||tx.includes('cancelado')||tx.includes('pagado')||tx.includes('pagada');}return true}catch(e){return true}}
+function dateMatch(tr,value){try{if(!value)return true;const tx=String(tr?.innerText||tr?.textContent||'');const parts=value.split('-');const y=parts[0],m=parts[1],d=parts[2];return tx.includes(value)||tx.includes(`${d}/${m}/${y}`)||tx.includes(`${d}-${m}-${y}`)||tx.includes(`${y}/${m}/${d}`)}catch(e){return true}}
+function filter(root,b,cfg){try{const body=root?.querySelector('table tbody');if(!body)return;const q=norm(b.querySelector('[data-vcs-q]')?.value||'');const stock=b.querySelector('[data-vcs-stock]')?.value||'todos';const status=norm(b.querySelector('[data-vcs-status]')?.value||'todos');const date=b.querySelector('[data-vcs-date]')?.value||'';let shown=0;const rows=[...body.querySelectorAll('tr')].filter(tr=>!tr.hasAttribute(EMPTY));rows.forEach(tr=>{const ok=(!q||text(tr).includes(q))&&(!date||dateMatch(tr,date))&&(cfg.quick!=='stock'||stockMatch(tr,stock))&&(cfg.quick!=='order-status'||statusMatch(tr,cfg,status))&&(cfg.quick!=='credit-status'||statusMatch(tr,cfg,status));tr.style.display=ok?'table-row':'none';if(ok)shown++});let empty=body.querySelector(`[${EMPTY}="${cfg.key}"]`);if(!empty){empty=document.createElement('tr');empty.setAttribute(EMPTY,cfg.key);empty.innerHTML='<td colspan="30" style="text-align:center;padding:14px">No hay registros que coincidan con los filtros.</td>';body.appendChild(empty)}empty.style.display=shown?'none':'table-row'}catch(e){console.error('[VENTARA] filtro '+cfg.key,e)}}
+function install(root,cfg){try{if(!root)return false;let b=root.querySelector(`[${MARK}="${cfg.key}"]`);if(b){filter(root,b,cfg);return true}const table=root.querySelector('table');if(!table?.parentNode)return false;b=makeControls(cfg);if(!b)return false;table.parentNode.insertBefore(b,table);const run=()=>{try{filter(root,b,cfg)}catch(e){console.error('[VENTARA] ejecutar '+cfg.key,e)}};b.querySelector('[data-vcs-q]')?.addEventListener('input',run);b.querySelector('[data-vcs-stock]')?.addEventListener('change',run);b.querySelector('[data-vcs-status]')?.addEventListener('change',run);b.querySelector('[data-vcs-date]')?.addEventListener('change',run);b.querySelector('[data-vcs-clear]')?.addEventListener('click',()=>{try{b.querySelector('[data-vcs-q]').value='';const s=b.querySelector('[data-vcs-stock]');if(s)s.value='todos';const st=b.querySelector('[data-vcs-status]');if(st)st.value='todos';const d=b.querySelector('[data-vcs-date]');if(d)d.value='';run()}catch(e){console.error('[VENTARA] limpiar '+cfg.key,e)}});run();return true}catch(e){console.error('[VENTARA] instalar '+cfg.key,e);return false}}
+function boot(){try{configs.forEach(cfg=>{try{const root=findRoot(cfg);if(root)install(root,cfg)}catch(e){console.error('[VENTARA] boot '+cfg.key,e)}})}catch(e){console.error('[VENTARA] buscadores',e)}}
+function schedule(){try{boot();[700,1600,3000].forEach(ms=>setTimeout(()=>{try{boot()}catch(e){console.error('[VENTARA] deferred search',e)}},ms))}catch(e){console.error('[VENTARA] schedule search',e)}}
+document.addEventListener('click',()=>{try{setTimeout(boot,250)}catch(e){console.error('[VENTARA] navigation search',e)}},{passive:true});
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(schedule,1500),{once:true});else setTimeout(schedule,1500);
+})();
