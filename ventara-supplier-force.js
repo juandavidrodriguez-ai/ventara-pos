@@ -1,74 +1,132 @@
-/* VENTARA POS — carga universal de proveedores, modulo aislado. */
-(()=>{
+/* VENTARA POS — lectura multi-fuente de proveedores, modulo aislado. */
+(function(){
   'use strict';
 
-  function getAllSuppliersInVentara(){try{
-    let found=[];
-    if(window.db&&Array.isArray(window.db.suppliers)&&window.db.suppliers.length>0){
-      return window.db.suppliers;
-    }
-    for(let i=0;i<localStorage.length;i++){
-      const key=localStorage.key(i);
-      try{
-        const parsed=JSON.parse(localStorage.getItem(key));
-        if(Array.isArray(parsed)&&parsed.length>0){
-          if(parsed[0].nombre||parsed[0].name||parsed[0].razonSocial||parsed[0].empresa||String(key).toLowerCase().includes('supplier')){
-            found=parsed;break;
-          }
-        }else if(parsed&&Array.isArray(parsed.suppliers)&&parsed.suppliers.length>0){
-          found=parsed.suppliers;break;
-        }
-      }catch(e){}
-    }
-    return found;
-  }catch(e){return[]}}
-
-  function forcePopulateSupplierSelect(){try{
-    const select=document.getElementById('productSupplier');
-    if(!select)return;
-    const suppliers=getAllSuppliersInVentara();
-    console.log('PROVEEDORES ENCONTRADOS EN MEMORIA:',suppliers);
-    const current=String(select.value||'');
-    select.innerHTML='<option value="">Sin Proveedor</option>';
-    suppliers.forEach(s=>{try{
-      const val=s?.id||s?.supplierId||s?._id||s?.codigo||s?.nombre||'';
-      const text=s?.nombre||s?.name||s?.razonSocial||s?.empresa||s?.proveedor||val;
-      if(text){
-        const opt=document.createElement('option');
-        opt.value=String(val);
-        opt.textContent=String(text);
-        select.appendChild(opt);
+  function getAllSuppliersInVentara(){
+    try{
+      if(window.db && Array.isArray(window.db.suppliers) && window.db.suppliers.length){
+        return window.db.suppliers;
       }
-    }catch(e){}});
-    if(current)select.value=current;
-  }catch(e){console.warn('[VENTARA] force supplier select',e)}}
 
-  function bindButtons(){try{
-    const root=document.getElementById('products');
-    if(root&&!root.dataset.ventaraSupplierForceGlobal){
-      root.dataset.ventaraSupplierForceGlobal='1';
-      root.addEventListener('click',e=>{
+      var found=[];
+      for(var i=0;i<localStorage.length;i++){
         try{
-          const b=e.target?.closest?.('button');
-          const text=(b?.textContent||'').trim();
-          if(/^\+?\s*nuevo artículo$|^\+?\s*nuevo articulo$|^editar$/i.test(text)){
-            setTimeout(forcePopulateSupplierSelect,100);
-          }
-        }catch(err){console.warn('[VENTARA] supplier click',err)}});
-    }
-    if(!document.body.dataset.ventaraSupplierForceGlobal){
-      document.body.dataset.ventaraSupplierForceGlobal='1';
-      document.addEventListener('click',e=>{
-        try{
-          if(e.target?.closest?.('#btnNewProduct, .btn-primary, [data-target="#productModal"]')){
-            setTimeout(forcePopulateSupplierSelect,100);
-          }
-        }catch(err){console.warn('[VENTARA] supplier global click',err)}});
-    }
-  }catch(e){console.warn('[VENTARA] supplier force bind',e)}}
+          var key=localStorage.key(i);
+          var raw=localStorage.getItem(key);
+          if(!raw) continue;
+          var parsed=JSON.parse(raw);
 
-  function boot(){try{bindButtons();forcePopulateSupplierSelect()}catch(e){console.warn('[VENTARA] supplier force boot',e)}}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,1000),{once:true});
-  else setTimeout(boot,1000);
-  window.ventaraSupplierForce={getAllSuppliersInVentara,forcePopulateSupplierSelect,refresh:boot};
+          if(Array.isArray(parsed) && parsed.length){
+            var first=parsed[0]||{};
+            if(first.nombre || first.name || first.razonSocial || first.empresa || String(key).toLowerCase().indexOf('supplier')!==-1){
+              found=parsed;
+              break;
+            }
+          }
+
+          if(parsed && Array.isArray(parsed.suppliers) && parsed.suppliers.length){
+            found=parsed.suppliers;
+            break;
+          }
+        }catch(storageError){
+          console.warn('[VENTARA] lectura proveedor',storageError);
+        }
+      }
+      return found;
+    }catch(error){
+      console.warn('[VENTARA] getAllSuppliersInVentara',error);
+      return [];
+    }
+  }
+
+  function populateSupplierDropdown(){
+    try{
+      var select=document.getElementById('productSupplier');
+      if(!select) return;
+
+      var suppliers=getAllSuppliersInVentara();
+      console.log('PROVEEDORES ENCONTRADOS EN MEMORIA:',suppliers);
+
+      var current=String(select.value||'');
+      select.innerHTML='<option value="">Sin Proveedor</option>';
+
+      suppliers.forEach(function(supplier){
+        try{
+          var id=supplier && (supplier.id || supplier.supplierId || supplier._id || supplier.codigo || supplier.nombre || '');
+          var name=supplier && (supplier.nombre || supplier.name || supplier.razonSocial || supplier.empresa || supplier.proveedor || id);
+          if(!name) return;
+
+          var option=document.createElement('option');
+          option.value=String(id);
+          option.textContent=String(name);
+          select.appendChild(option);
+        }catch(optionError){
+          console.warn('[VENTARA] opcion proveedor',optionError);
+        }
+      });
+
+      if(current) select.value=current;
+    }catch(error){
+      console.warn('[VENTARA] populateSupplierDropdown',error);
+    }
+  }
+
+  function bindButtons(){
+    try{
+      var root=document.getElementById('products');
+      if(root && !root.dataset.ventaraSupplierForceGlobal){
+        root.dataset.ventaraSupplierForceGlobal='1';
+        root.addEventListener('click',function(event){
+          try{
+            var button=event.target && event.target.closest ? event.target.closest('button') : null;
+            var text=button ? String(button.textContent||'').trim() : '';
+            if(/^\+?\s*nuevo artículo$|^\+?\s*nuevo articulo$|^editar$/i.test(text)){
+              setTimeout(populateSupplierDropdown,100);
+            }
+          }catch(error){
+            console.warn('[VENTARA] click proveedor',error);
+          }
+        });
+      }
+
+      if(document.body && !document.body.dataset.ventaraSupplierForceGlobal){
+        document.body.dataset.ventaraSupplierForceGlobal='1';
+        document.body.addEventListener('click',function(event){
+          try{
+            var target=event.target;
+            if(target && target.closest && target.closest('#btnNewProduct, .btn-primary, [data-target="#productModal"]')){
+              setTimeout(populateSupplierDropdown,100);
+            }
+          }catch(error){
+            console.warn('[VENTARA] click global proveedor',error);
+          }
+        });
+      }
+    }catch(error){
+      console.warn('[VENTARA] bindButtons proveedor',error);
+    }
+  }
+
+  function boot(){
+    try{
+      bindButtons();
+      populateSupplierDropdown();
+    }catch(error){
+      console.warn('[VENTARA] boot proveedor',error);
+    }
+  }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',function(){
+      setTimeout(boot,1000);
+    },{once:true});
+  }else{
+    setTimeout(boot,1000);
+  }
+
+  window.ventaraSupplierForce={
+    getAllSuppliersInVentara:getAllSuppliersInVentara,
+    populateSupplierDropdown:populateSupplierDropdown,
+    refresh:boot
+  };
 })();
