@@ -1,0 +1,20 @@
+name: Validate Pedidos module
+
+on:
+  push:
+    paths:
+      - 'ventara-orders-evolution.js'
+      - '.github/workflows/validate-orders-module.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate JavaScript syntax
+        run: node --check ventara-orders-evolution.js
