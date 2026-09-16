@@ -18,6 +18,10 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+      - name: Sync with latest main
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
       - name: Inject Orders module loader
         shell: python
         run: |
