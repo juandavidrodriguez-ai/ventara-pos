@@ -1,0 +1,187 @@
+name: Replace Pedidos source directly
+
+on:
+  push:
+    paths:
+      - '.github/workflows/replace-orders-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  replace:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Replace Pedidos HTML and direct binding
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: |
+          python3 -m pip install --quiet beautifulsoup4
+          python3 <<'PY'
+          from pathlib import Path
+          from bs4 import BeautifulSoup
+          import re
+
+          INDEX = Path('index.html')
+          CATEGORIES = Path('ventara-categories.js')
+          html = INDEX.read_text(encoding='utf-8')
+          soup = BeautifulSoup(html, 'html.parser')
+
+          orders = soup.find(id='orders')
+          if not orders:
+              raise SystemExit('No se encontró #orders en index.html')
+
+          orders_html = '''
+          <section id="orders" class="page">
+            <div class="head">
+              <div>
+                <h1>Pedidos</h1>
+                <p>Gestión de pedidos, despacho, entregas programadas y alertas preventivas.</p>
+              </div>
+              <div class="actions">
+                <button id="btnNewOrder" type="button" class="btn btn-primary btn primary">+ Nuevo pedido</button>
+              </div>
+            </div>
+            <div class="grid kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px">
+              <div class="card kpi"><div class="label">Pendientes</div><div class="value" id="ordersPendingCount">0</div></div>
+              <div class="card kpi"><div class="label">Entregados</div><div class="value" id="ordersDeliveredCount">0</div></div>
+              <div class="card kpi"><div class="label">Cancelados</div><div class="value" id="ordersCancelledCount">0</div></div>
+            </div>
+            <div class="card">
+              <div class="tablewrap">
+                <table id="ordersTable" class="table">
+                  <thead><tr>
+                    <th>ID PEDIDO</th><th>CLIENTE</th><th>DIRECCIÓN / TEL.</th><th>FECHA / HORA ENTREGA</th>
+                    <th>TOTAL</th><th>ESTADO</th><th>ALERTA</th><th>ACCIONES</th>
+                  </tr></thead>
+                  <tbody id="ordersTableBody"><tr><td colspan="8" class="empty">No hay pedidos registrados.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+          '''
+          orders.replace_with(BeautifulSoup(orders_html, 'html.parser').find('section'))
+
+          old_modal = soup.find(id='orderModal')
+          modal_html = '''
+          <div id="orderModal" class="modal" aria-hidden="true">
+            <div class="modalbox" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
+              <div class="head" style="margin-bottom:16px">
+                <div><h2 id="orderModalTitle" style="margin:0">Nuevo pedido</h2></div>
+                <button id="btnCloseOrderModal" type="button" class="btn">Cerrar</button>
+              </div>
+              <form id="orderForm">
+                <div class="card" style="box-shadow:none;margin-bottom:14px">
+                  <h3 style="margin-top:0">Cliente y entrega</h3>
+                  <div class="form">
+                    <div class="field"><label for="orderCustomer">Cliente</label><select id="orderCustomer"></select></div>
+                    <div class="field"><label for="orderPhone">Teléfono de contacto</label><input id="orderPhone" type="text" inputmode="tel"></div>
+                    <div class="field full"><label for="orderAddress">Dirección de entrega</label><input id="orderAddress" type="text"></div>
+                    <div class="field"><label for="orderDeliveryDate">Fecha programada de entrega</label><input id="orderDeliveryDate" type="date"></div>
+                    <div class="field"><label for="orderDeliveryTime">Hora estimada de entrega</label><input id="orderDeliveryTime" type="time"></div>
+                    <div class="field"><label for="orderStatus">Estado</label><select id="orderStatus"><option>Pendiente</option><option>Entregado</option><option>Cancelado</option></select></div>
+                  </div>
+                </div>
+                <div class="card" style="box-shadow:none">
+                  <h3 style="margin-top:0">Productos del pedido</h3>
+                  <div class="form" style="align-items:end">
+                    <div class="field"><label for="orderProductSearch">Buscar producto</label><input id="orderProductSearch" type="search" placeholder="Nombre o código"></div>
+                    <div class="field"><label for="orderProduct">Selector de Producto</label><select id="orderProduct"></select></div>
+                    <div class="field"><label for="orderQty">Cantidad</label><input id="orderQty" type="number" min="0.001" step="0.001" value="1"></div>
+                    <div class="field"><button id="btnAddOrderItem" type="button" class="btn primary">+ Agregar ítem</button></div>
+                  </div>
+                  <div class="tablewrap" style="margin-top:14px">
+                    <table id="orderItemsTable" class="table">
+                      <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Subtotal</th><th>Acciones</th></tr></thead>
+                      <tbody id="orderItemsBody"><tr><td colspan="5" class="empty">Agrega los productos del pedido.</td></tr></tbody>
+                    </table>
+                  </div>
+                  <div class="totals"><div class="totalline grand"><span>Total general</span><span id="orderTotal">$ 0</span></div></div>
+                </div>
+                <div class="actions" style="justify-content:flex-end;margin-top:16px">
+                  <button id="btnCancelOrder" type="button" class="btn">Cancelar</button>
+                  <button id="btnSaveOrder" type="submit" class="btn success">Guardar pedido</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          '''
+          new_modal = BeautifulSoup(modal_html, 'html.parser').find('div', id='orderModal')
+          if old_modal:
+              old_modal.replace_with(new_modal)
+          else:
+              soup.body.append(new_modal)
+
+          direct_js = r'''
+          <script id="ventara-direct-orders-source">
+          (() => {
+            'use strict';
+            const $ = id => document.getElementById(id);
+            const getDb = () => { try { return typeof db !== 'undefined' ? db : window.db; } catch(e) { return window.db; } };
+            const money = n => { try { return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(Number(n)||0); } catch(e) { return '$ '+Number(n||0).toLocaleString('es-CO'); } };
+            const today = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+            let orderItems = [];
+            function ensureOrders(){ const d=getDb(); if(!d)return null; d.orders=Array.isArray(d.orders)?d.orders:[]; return d; }
+            function saveDb(){ try { if(typeof window.save==='function') window.save(); else { const d=getDb(); if(d)localStorage.setItem('ventara_pos_v1',JSON.stringify(d)); } } catch(e){} }
+            function customerList(){ const d=getDb(); return Array.isArray(d?.customers)?d.customers:(Array.isArray(d?.clients)?d.clients:[]); }
+            function productList(){ const d=getDb(); return Array.isArray(d?.products)?d.products:[]; }
+            function pname(p){ return String(p?.name||p?.nombre||p?.description||'Producto sin nombre'); }
+            function pid(p){ return String(p?.id??p?.productId??p?._id??''); }
+            function pprice(p){ return Number(p?.price??p?.salePrice??p?.precio??p?.sellingPrice??0)||0; }
+            function openNewOrderModal(){
+              const m=$('orderModal'); if(!m)return;
+              orderItems=[];
+              $('orderForm')?.reset();
+              $('orderDeliveryDate').value=today(); $('orderStatus').value='Pendiente'; $('orderQty').value='1';
+              populateCustomers(); populateProducts(); renderOrderItems();
+              m.classList.add('show'); m.style.display='flex'; m.setAttribute('aria-hidden','false');
+            }
+            window.openNewOrderModal = openNewOrderModal;
+            function closeOrderModal(){ const m=$('orderModal'); if(!m)return; m.classList.remove('show'); m.style.display='none'; m.setAttribute('aria-hidden','true'); }
+            function populateCustomers(){ const s=$('orderCustomer'); if(!s)return; const a=customerList(); s.innerHTML=(a.length?a:[{id:'c-final',name:'Consumidor Final'}]).map(c=>`<option value="${String(c.id??c._id??'c-final').replace(/"/g,'&quot;')}">${String(c.name??c.nombre??c.razonSocial??'Consumidor Final').replace(/</g,'&lt;')}</option>`).join(''); }
+            function populateProducts(){ const s=$('orderProduct'); if(!s)return; const q=String($('orderProductSearch')?.value||'').toLowerCase().trim(); const a=productList().filter(p=>p?.active!==false && (!q || pname(p).toLowerCase().includes(q) || String(p?.code||'').toLowerCase().includes(q))); s.innerHTML=a.map(p=>`<option value="${pid(p).replace(/"/g,'&quot;')}">${pname(p).replace(/</g,'&lt;')} · ${money(pprice(p))}</option>`).join('') || '<option value="">No hay productos</option>'; }
+            function renderOrderItems(){ const body=$('orderItemsBody'), total=$('orderTotal'); if(!body||!total)return; body.innerHTML=orderItems.length?orderItems.map((i,n)=>`<tr><td>${i.name}</td><td>${i.qty}</td><td>${money(i.price)}</td><td><b>${money(i.qty*i.price)}</b></td><td><button type="button" class="btn sm danger" data-remove-order-item="${n}">Eliminar</button></td></tr>`).join(''):'<tr><td colspan="5" class="empty">Agrega los productos del pedido.</td></tr>'; total.textContent=money(orderItems.reduce((s,i)=>s+i.qty*i.price,0)); body.querySelectorAll('[data-remove-order-item]').forEach(b=>b.onclick=()=>{orderItems.splice(Number(b.dataset.removeOrderItem),1);renderOrderItems();}); }
+            function addItem(){ const d=getDb(), id=$('orderProduct')?.value, qty=Number($('orderQty')?.value)||0; const p=productList().find(x=>pid(x)===String(id)); if(!p||qty<=0)return; const found=orderItems.find(x=>x.productId===pid(p)); if(found){found.qty+=qty;} else orderItems.push({productId:pid(p),name:pname(p),qty,price:pprice(p)}); renderOrderItems(); }
+            function submitOrder(e){ e.preventDefault(); const d=ensureOrders(); if(!d)return; const customer=customerList().find(c=>String(c.id??c._id??'')===String($('orderCustomer')?.value||'')); const total=orderItems.reduce((s,i)=>s+i.qty*i.price,0); const order={id:'PED-'+Date.now().toString().slice(-5),customer:String(customer?.name??customer?.nombre??'Consumidor Final'),customerId:String($('orderCustomer')?.value||''),address:String($('orderAddress')?.value||''),phone:String($('orderPhone')?.value||''),deliveryDate:String($('orderDeliveryDate')?.value||''),deliveryTime:String($('orderDeliveryTime')?.value||''),items:orderItems.map(i=>({...i,subtotal:i.qty*i.price})),total,status:String($('orderStatus')?.value||'Pendiente'),createdAt:new Date().toISOString()}; d.orders.push(order); saveDb(); closeOrderModal(); renderOrders(); }
+            function renderOrders(){ const d=ensureOrders(); const body=$('ordersTableBody'); if(!d||!body)return; const orders=d.orders||[]; $('ordersPendingCount').textContent=orders.filter(o=>(o.status||'Pendiente')==='Pendiente').length; $('ordersDeliveredCount').textContent=orders.filter(o=>o.status==='Entregado').length; $('ordersCancelledCount').textContent=orders.filter(o=>o.status==='Cancelado').length; body.innerHTML=orders.length?orders.map(o=>{const status=o.status||'Pendiente';let alert='PROGRAMADO'; if(status==='Entregado')alert='ENTREGADO'; else if(status==='Cancelado')alert='CANCELADO'; else if(o.deliveryDate===today())alert='¡ENTREGAR HOY!'; else if(o.deliveryDate&&o.deliveryDate<today())alert='¡VENCIDO / RETRASADO!'; return `<tr><td><b>${o.id||'P-00001'}</b></td><td>${o.customer||''}</td><td><div>${o.address||''}</div><small class="muted">${o.phone||''}</small></td><td>${[o.deliveryDate,o.deliveryTime].filter(Boolean).join(' ')}</td><td><b>${money(o.total)}</b></td><td><span class="badge ${status==='Entregado'?'green':status==='Cancelado'?'red':'warn'}">${status}</span></td><td><span class="badge ${alert==='¡VENCIDO / RETRASADO!'?'red':alert==='¡ENTREGAR HOY!'?'warn':alert==='ENTREGADO'?'green':''}">${alert}</span></td><td><button type="button" class="btn sm" data-order-detail="${o.id}">Ver Detalles</button>${status==='Pendiente'?` <button type="button" class="btn sm success" data-order-deliver="${o.id}">Marcar Entregado</button> <button type="button" class="btn sm danger" data-order-cancel="${o.id}">Cancelar</button>`:''}</td></tr>`}).join(''):'<tr><td colspan="8" class="empty">No hay pedidos registrados.</td></tr>'; body.querySelectorAll('[data-order-deliver]').forEach(b=>b.onclick=()=>setOrderStatus(b.dataset.orderDeliver,'Entregado')); body.querySelectorAll('[data-order-cancel]').forEach(b=>b.onclick=()=>setOrderStatus(b.dataset.orderCancel,'Cancelado')); body.querySelectorAll('[data-order-detail]').forEach(b=>b.onclick=()=>{const o=orders.find(x=>String(x.id)===String(b.dataset.orderDetail)); if(o)alert(`Pedido ${o.id}\nCliente: ${o.customer||''}\nTotal: ${money(o.total)}\nEstado: ${o.status||'Pendiente'}`);}); }
+            function setOrderStatus(id,status){ const d=ensureOrders(),o=d?.orders?.find(x=>String(x.id)===String(id)); if(!o)return; o.status=status; saveDb(); renderOrders(); }
+            document.addEventListener('DOMContentLoaded',()=>{
+              const b=$('btnNewOrder'); if(b) b.onclick=function(){ openNewOrderModal(); };
+              $('btnCloseOrderModal')?.addEventListener('click',closeOrderModal); $('btnCancelOrder')?.addEventListener('click',closeOrderModal); $('btnAddOrderItem')?.addEventListener('click',addItem); $('orderProductSearch')?.addEventListener('input',populateProducts); $('orderForm')?.addEventListener('submit',submitOrder); $('orderCustomer')?.addEventListener('change',()=>{const c=customerList().find(x=>String(x.id??x._id??'')===String($('orderCustomer').value)); if(c)$('orderPhone').value=c.phone??c.telefono??'';});
+              const m=$('orderModal'); m?.addEventListener('click',e=>{if(e.target===m)closeOrderModal();}); renderOrders();
+            });
+          })();
+          </script>
+          '''
+          # Remove any previous direct source block and append the authoritative direct implementation.
+          for old in soup.find_all('script', id='ventara-direct-orders-source'):
+              old.decompose()
+          soup.body.append(BeautifulSoup(direct_js, 'html.parser').find('script'))
+
+          # Stop loading runtime order patches/interceptors from the module loader.
+          if CATEGORIES.exists():
+              c = CATEGORIES.read_text(encoding='utf-8')
+              c = re.sub(r"\s*'ventara-orders-dom-fix\.js[^']*',?", '', c)
+              c = re.sub(r"\s*'ventara-orders-button-fix\.js[^']*',?", '', c)
+              c = re.sub(r"\s*'ventara-orders-evolution\.js[^']*',?", '', c)
+              CATEGORIES.write_text(c, encoding='utf-8')
+
+          INDEX.write_text(str(soup), encoding='utf-8')
+          print('Pedidos reemplazado directamente en index.html; loader de parches de pedidos desactivado.')
+          PY
+
+      - name: Commit direct source replacement and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html ventara-categories.js
+          git rm .github/workflows/replace-orders-source.yml
+          git commit -m "fix(orders): replace pedidos source and bind modal directly"
+          git push origin main
