@@ -57,3 +57,5 @@ Separar frontend/backend, agregar API y base de datos PostgreSQL, autenticación
 - Prueba de impresión y comando ESC/POS de apertura de cajón cuando existe conexión serial compatible.
 
 > Nota de hardware: un navegador web no puede controlar de forma universal cualquier impresora USB, cajón o báscula. VENTARA deja la configuración y las interfaces preparadas; para equipos USB que no expongan Web Serial se recomienda un pequeño puente local ESC/POS.
+
+<!-- repair trigger -->
