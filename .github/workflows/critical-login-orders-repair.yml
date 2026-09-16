@@ -1,0 +1,46 @@
+name: Critical Login Orders Repair
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.event.head_commit.message != 'CLEANUP: remove temporary repair workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aa2ba07abb3bc33d6003378f2064f14a3a22c9f7
+          fetch-depth: 0
+      - name: Repair index.html
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          s=s.replace('id="loginScreen"','id="login-screen"')
+          s=s.replace("getElementById('loginScreen')","getElementById('login-screen')")
+          login_css='''\n/* CRITICAL LOGIN STATE */\n#login-screen{display:flex!important}\n'''
+          if '/* CRITICAL LOGIN STATE */' not in s:
+              s=s.replace('</style>',login_css+'</style>',1)
+          orders=r'''\n<!-- VENTARA CRITICAL ORDERS MONOLITH -->\n<style>\n#orderModal .modalbox{width:min(920px,94vw)}\n.orders-evolved-table{width:100%;border-collapse:collapse}\n.orders-evolved-table th,.orders-evolved-table td{padding:10px;border-bottom:1px solid var(--border);font-size:13px;text-align:left}\n.orders-evolved-table th{font-size:11px;color:var(--muted);text-transform:uppercase}\n.order-section{border:1px solid var(--border);border-radius:10px;padding:14px;margin:12px 0}\n.order-section h3{margin:0 0 12px;font-size:15px}\n.order-items-total{display:flex;justify-content:flex-end;font-weight:900;font-size:18px;margin-top:10px}\n</style>\n<div id="orderModal" class="modal" aria-hidden="true">\n  <div class="modalbox">\n    <div class="head"><div><h1>Nuevo pedido</h1><p>Cliente, entrega y productos del pedido</p></div><button class="btn" type="button" id="btnCloseOrder">Cerrar</button></div>\n    <div class="order-section"><h3>Cliente y entrega</h3><div class="form">\n      <div class="field"><label>Cliente</label><select id="orderClient"></select></div>\n      <div class="field"><label>Teléfono de contacto</label><input id="orderPhone" type="tel"></div>\n      <div class="field full"><label>Dirección de entrega</label><input id="orderAddress"></div>\n      <div class="field"><label>Fecha programada de entrega</label><input id="orderDate" type="date"></div>\n      <div class="field"><label>Hora estimada de entrega</label><input id="orderTime" type="time"></div>\n      <div class="field"><label>Estado</label><select id="orderStatus"><option>Pendiente</option><option>Confirmado</option><option>En preparación</option><option>En camino</option><option>Entregado</option><option>Cancelado</option></select></div>\n    </div></div>\n    <div class="order-section"><h3>Productos del pedido</h3><div class="form">\n      <div class="field"><label>Buscar producto</label><input id="orderProductSearch" placeholder="Buscar..."></div>\n      <div class="field"><label>Producto</label><select id="orderProduct"></select></div>\n      <div class="field"><label>Cantidad</label><input id="orderQty" type="number" min="1" value="1"></div>\n      <div class="field" style="justify-content:end"><button class="btn primary" type="button" id="btnAddOrderItem">+ Agregar ítem</button></div>\n    </div><div class="tablewrap" style="margin-top:12px"><table class="table"><thead><tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Total</th><th></th></tr></thead><tbody id="orderItemsBody"><tr><td colspan="5" class="empty">Sin productos agregados</td></tr></tbody></table></div><div id="orderItemsTotal" class="order-items-total">Total: $0</div></div>\n    <div class="actions" style="justify-content:flex-end"><button class="btn" type="button" id="btnCancelOrder">Cancelar</button><button class="btn success" type="button" id="btnSaveOrderMonolithic">Guardar pedido</button></div>\n  </div>\n</div>\n<script>\n(function(){\n  function money(v){return '$'+Number(v||0).toLocaleString('es-CO')}\n  function state(){try{return JSON.parse(localStorage.getItem('ventara_pos_v1')||'{}')}catch(e){return {}}}\n  var items=[];\n  function openOrder(){var m=document.getElementById('orderModal');if(!m)return;m.style.display='block';m.classList.add('show');m.setAttribute('aria-hidden','false');items=[];renderItems();loadLists();}\n  function closeOrder(){var m=document.getElementById('orderModal');if(!m)return;m.classList.remove('show');m.style.display='none';m.setAttribute('aria-hidden','true')}\n  function loadLists(){var d=state(),cs=d.customers||d.clients||[],ps=d.products||[];var c=document.getElementById('orderClient'),p=document.getElementById('orderProduct');if(c)c.innerHTML='<option value="">Seleccione...</option>'+cs.map(function(x){return '<option value="'+String(x.id||'')+'">'+String(x.name||x.full_name||x.company||'Cliente')+'</option>'}).join('');if(p)p.innerHTML='<option value="">Seleccione...</option>'+ps.map(function(x){return '<option value="'+String(x.id||'')+'">'+String(x.name||x.title||'Producto')+' — '+money(x.price||x.salePrice||0)+'</option>'}).join('');}\n  function renderItems(){var b=document.getElementById('orderItemsBody'),t=document.getElementById('orderItemsTotal');if(!b)return;if(!items.length){b.innerHTML='<tr><td colspan="5" class="empty">Sin productos agregados</td></tr>';if(t)t.textContent='Total: $0';return}var total=items.reduce(function(a,x){return a+x.qty*x.price},0);b.innerHTML=items.map(function(x,i){return '<tr><td>'+x.name+'</td><td>'+x.qty+'</td><td>'+money(x.price)+'</td><td>'+money(x.qty*x.price)+'</td><td><button class="btn danger sm" type="button" data-order-remove="'+i+'">Quitar</button></td></tr>'}).join('');if(t)t.textContent='Total: '+money(total);}\n  function renderOrders(){var host=document.querySelector('[data-page="orders"]')||document.getElementById('orders');if(!host)return;var d=state(),orders=d.orders||[];host.innerHTML='<div class="head"><div><h1>Pedidos</h1><p>Gestión de pedidos y entregas</p></div><div class="actions"><button class="btn primary" id="btnNewOrder" type="button">+ Nuevo pedido</button></div></div><div class="card"><div class="tablewrap"><table class="orders-evolved-table"><thead><tr><th>ID PEDIDO</th><th>CLIENTE</th><th>DIRECCIÓN / TEL.</th><th>FECHA / HORA ENTREGA</th><th>TOTAL</th><th>ESTADO</th><th>ALERTA</th><th>ACCIONES</th></tr></thead><tbody>'+((orders.length?orders:[]).map(function(o,i){var id=o.id||('O-'+String(i+1).padStart(6,'0'));var client=o.clientName||o.customerName||o.client||'—';var addr=o.address||o.deliveryAddress||'—';var phone=o.phone||o.customerPhone||'—';var date=o.deliveryDate||o.date||'—';var time=o.deliveryTime||o.time||'—';var total=o.total==null?0:o.total;var status=o.status||'Pendiente';var alert=o.alert||'—';return '<tr><td>'+id+'</td><td>'+client+'</td><td>'+addr+' / '+phone+'</td><td>'+date+' / '+time+'</td><td>'+money(total)+'</td><td>'+status+'</td><td>'+alert+'</td><td><button class="btn sm" type="button">Ver</button></td></tr>'}).join('')||'<tr><td colspan="8" class="empty">Sin pedidos registrados</td></tr>')+'</tbody></table></div></div>';var b=document.getElementById('btnNewOrder');if(b){b.onclick=function(){document.getElementById("orderModal").style.display="block";document.getElementById("orderModal").classList.add("show");openOrder()}}}\n  document.addEventListener('click',function(e){var rm=e.target.closest('[data-order-remove]');if(rm){items.splice(Number(rm.getAttribute('data-order-remove')),1);renderItems();return}if(e.target.closest('#btnCloseOrder')||e.target.closest('#btnCancelOrder')){closeOrder();return}if(e.target.closest('#btnAddOrderItem')){var d=state(),ps=d.products||[],id=document.getElementById('orderProduct')?.value,p=ps.find(function(x){return String(x.id||'')===String(id)});var q=Math.max(1,Number(document.getElementById('orderQty')?.value||1));if(p)items.push({id:p.id,name:p.name||p.title||'Producto',qty:q,price:Number(p.price||p.salePrice||0)});renderItems();return}});\n  window.renderEvolvedOrders=renderOrders;\n  var oldShow=window.showPage;window.showPage=function(page){var r=oldShow?oldShow.apply(this,arguments):undefined;if(page==='orders')setTimeout(renderOrders,0);return r};\n})();\n</script>\n'''
+          s=s.replace('</body>',orders+'</body>')
+          p.write_text(s)
+          PY
+          rm -f ventara-orders-evolution.js ventara-orders-button-fix.js ventara-orders-dom-fix.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'FIX: restaurar login nativo y mantener pedidos evolucionados'
+          git push origin HEAD:main
+      - name: Remove temporary workflow
+        if: success()
+        shell: bash
+        run: |
+          git fetch origin main
+          git checkout origin/main -- .github/workflows/critical-login-orders-repair.yml
+          git rm -f .github/workflows/critical-login-orders-repair.yml
+          git commit -m 'CLEANUP: remove temporary repair workflow'
+          git push origin HEAD:main
