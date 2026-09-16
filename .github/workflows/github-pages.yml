@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -24,8 +24,7 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v4
 
-      - name: Repair login and preserve evolved Orders
-        if: github.event.head_commit.message != 'FIX: login nativo y pedidos integrados'
+      - name: Repair login and Orders in deployed artifact
         shell: bash
         run: |
           python3 - <<'PY'
@@ -42,15 +41,6 @@ jobs:
           p.write_text(s)
           PY
           rm -f ventara-orders-evolution.js ventara-orders-button-fix.js ventara-orders-dom-fix.js
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No source repair changes needed."
-          else
-            git commit -m 'FIX: login nativo y pedidos integrados'
-            git push origin HEAD:main
-          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
