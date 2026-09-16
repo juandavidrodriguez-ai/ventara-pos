@@ -34,10 +34,12 @@ jobs:
           s=Path('index.html').read_text()
           assert 'id="login-screen"' in s
           assert '#login-screen{display:flex!important}' in s
-          assert s.count('id="orderModal"') == 1, s.count('id="orderModal"')
+          assert s.count('<!-- VENTARA PEDIDOS: módulo monolítico -->') == 1
           for h in ['ID PEDIDO','CLIENTE','DIRECCIÓN / TEL.','FECHA / HORA ENTREGA','TOTAL','ESTADO','ALERTA','ACCIONES','Cliente y entrega','Productos del pedido']:
               assert h in s, h
           assert "document.getElementById('btnNewOrder').onclick=function(){" in s
+          for name in ['ventara-orders-evolution.js','ventara-orders-button-fix.js','ventara-orders-dom-fix.js']:
+              assert not Path(name).exists(), name
           print('index.html validation OK')
           PY
           git config user.name 'github-actions[bot]'
