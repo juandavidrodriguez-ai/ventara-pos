@@ -22,8 +22,11 @@
 /* Los parches funcionales no forman parte del arranque ni de la autenticación. */
 (()=>{
   'use strict';
-  const modules=['ventara-payment-options.js','ventara-sales-filter.js','ventara-suppliers-patch.js','ventara-clients-quotes-filter.js','ventara-global-filters-patch.js','ventara-core-modules-search.js','ventara-alerts-phase1.js','ventara-supplier-force.js','ventara-supplier-definitive-fix.js?v=20260915-2','ventara-orders-evolution.js'];
+  const modules=['ventara-payment-options.js','ventara-sales-filter.js','ventara-suppliers-patch.js','ventara-clients-quotes-filter.js','ventara-global-filters-patch.js','ventara-core-modules-search.js','ventara-alerts-phase1.js','ventara-supplier-force.js','ventara-supplier-definitive-fix.js?v=20260915-2'];
   const load=src=>{try{const base=src.split('?')[0];if(document.querySelector(`script[src="${src}"],script[src^="${base}?"]`))return;const s=document.createElement('script');s.src=src;s.defer=true;s.async=false;document.head.appendChild(s)}catch(e){console.warn('[VENTARA] module load',src,e)}};
   const loadAll=()=>{try{modules.forEach(load)}catch(e){console.warn('[VENTARA] module batch',e)}};
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(loadAll,1500),{once:true});else setTimeout(loadAll,1500);
+  const ensureOrders=()=>{try{if(!window.db)return;const root=document.getElementById('orders');if(!root)return;const existing=document.querySelector('script[data-ventara-orders-evolution="1"]');if(existing)return;const s=document.createElement('script');s.src='ventara-orders-evolution.js';s.defer=true;s.async=false;s.dataset.ventaraOrdersEvolution='1';document.head.appendChild(s)}catch(e){console.warn('[VENTARA] orders module load',e)}};
+  const watchOrders=()=>{ensureOrders();let n=0;const timer=setInterval(()=>{ensureOrders();if(document.querySelector('script[data-ventara-orders-evolution="1"]')||++n>=40)clearInterval(timer)},250);try{new MutationObserver(ensureOrders).observe(document.body,{childList:true,subtree:true})}catch(e){console.warn('[VENTARA] orders observer',e)}};
+  const start=()=>{loadAll();watchOrders()};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(start,50),{once:true});else setTimeout(start,50);
 })();
