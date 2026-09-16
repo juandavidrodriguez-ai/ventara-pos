@@ -33,7 +33,7 @@ jobs:
           rm -f ventara-orders-evolution.js ventara-orders-button-fix.js ventara-orders-dom-fix.js
           git config user.name 'juandavidrodriguez-ai'
           git config user.email 'juandavidrodriguez@colegiolossamanes.edu.co'
-          git add index.html ventara-orders-evolution.js ventara-orders-button-fix.js ventara-orders-dom-fix.js
+          git add -A
           git commit -m 'RESTORE: Pedidos monolítico directo en index.html'
           git push origin main
       - name: Remove temporary workflow
@@ -45,4 +45,4 @@ jobs:
           git config user.email 'juandavidrodriguez@colegiolossamanes.edu.co'
           git commit -m 'CHORE: remove temporary monolithic restore workflow'
           git push origin main
-# trigger-ready-v2
+# trigger-ready-v3
