@@ -1,0 +1,50 @@
+name: One-time UI clean import
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Add UI cleanup script import
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          tag = '<script src="ventara-ui-clean.js"></script>'
+          if tag not in s:
+              marker = '</body>'
+              pos = s.lower().rfind(marker)
+              if pos == -1:
+                  raise SystemExit('No se encontró </body> en index.html')
+              s = s[:pos] + tag + '\n' + s[pos:]
+              p.write_text(s, encoding='utf-8')
+              print('Import agregado.')
+          else:
+              print('Import ya estaba presente; no se modifica index.html.')
+          PY
+
+      - name: Commit exact surgical change and remove temporary workflow
+        run: |
+          rm -f .github/workflows/one-time-ui-import.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html .github/workflows/one-time-ui-import.yml
+          if git diff --cached --quiet; then
+            echo 'Sin cambios que confirmar.'
+            exit 0
+          fi
+          git commit -m 'fix(ui): import surgical UI cleanup script'
+          git push origin HEAD:main
