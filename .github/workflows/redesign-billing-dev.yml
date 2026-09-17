@@ -1,0 +1,262 @@
+name: Apply surgical billing redesign (dev)
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: billing-redesign-dev
+  cancel-in-progress: true
+
+jobs:
+  patch-index:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+
+      - name: Apply billing redesign to index.html
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path("index.html")
+          html = path.read_text(encoding="utf-8")
+          marker = "/* VENTARA_BILLING_REDESIGN_V1 */"
+
+          if marker not in html:
+              css = r'''<style>
+          /* VENTARA_BILLING_REDESIGN_V1 */
+          #billing .billing-pos{grid-template-columns:1fr!important}
+          #billing .billing-product-catalog{display:none!important}
+          #billing .billing-detail-card{width:100%;min-width:0}
+          #billing .billing-detail-card .billing-detail-table-wrap{width:100%;overflow:auto;border:1px solid var(--border);border-radius:10px;background:#fff}
+          #billing .billing-detail-card table.billing-detail-table{width:100%;border-collapse:collapse;min-width:920px}
+          #billing .billing-detail-card .billing-detail-table th{padding:10px 9px;border-bottom:1px solid var(--border);background:#f7fafc;color:var(--muted);font-size:11px;text-transform:uppercase;text-align:left;white-space:nowrap}
+          #billing .billing-detail-card .billing-detail-table td{padding:10px 9px;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap;vertical-align:middle}
+          #billing .billing-detail-card .billing-detail-table tbody tr:last-child td{border-bottom:0}
+          #billing .billing-detail-card .billing-detail-table .billing-product-name{font-weight:700;white-space:normal;min-width:190px}
+          #billing .billing-detail-card .billing-detail-table .billing-number{text-align:right}
+          #billing .billing-detail-card .billing-delete{width:32px;height:32px;border-radius:7px;background:#fee2e2;color:#991b1b;font-size:16px;display:inline-flex;align-items:center;justify-content:center}
+          #billing .billing-detail-card .billing-empty{padding:34px 18px;text-align:center;color:var(--muted)}
+          #billing .billing-detail-card .billing-totals{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;margin-left:auto;width:min(420px,100%)}
+          #billing .billing-detail-card .billing-totals .billing-total-line{display:flex;justify-content:space-between;gap:20px;margin:8px 0;font-size:14px}
+          #billing .billing-detail-card .billing-totals .billing-grand{font-size:24px;font-weight:900;margin-top:12px;padding-top:12px;border-top:2px solid var(--border)}
+          #billing .billing-detail-card .billing-totals .billing-grand strong:last-child{font-size:26px}
+          #billing .billing-detail-card .billing-table-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
+          #billing .billing-detail-card .billing-table-title h3{margin:0;font-size:17px}
+          </style>'''
+
+              js = r'''<script>
+          (() => {
+            const initBillingRedesign = () => {
+              const billing = document.querySelector('#billing');
+              if (!billing) return;
+
+              billing.querySelectorAll('button').forEach((button) => {
+                const text = (button.textContent || '').trim().toLowerCase();
+                if (text.includes('nuevo artículo') || text.includes('nuevo articulo') || text === 'categorías' || text === 'categorias') {
+                  button.style.display = 'none';
+                }
+              });
+
+              billing.querySelectorAll('.productgrid').forEach((grid) => {
+                grid.classList.add('billing-product-catalog');
+              });
+              billing.querySelectorAll('.pos').forEach((pos) => pos.classList.add('billing-pos'));
+
+              const rows = () => Array.from(billing.querySelectorAll('.cartrow'));
+              const firstRow = rows()[0];
+              if (!firstRow) return;
+
+              const detailCard = firstRow.closest('.card');
+              if (!detailCard) return;
+              detailCard.classList.add('billing-detail-card');
+
+              let source = firstRow.parentElement;
+              if (!source) return;
+              source.classList.add('billing-cart-source');
+
+              let tableWrap = detailCard.querySelector('.billing-detail-table-wrap');
+              if (!tableWrap) {
+                const title = document.createElement('div');
+                title.className = 'billing-table-title';
+                title.innerHTML = '<h3>Detalle de la factura</h3>';
+
+                tableWrap = document.createElement('div');
+                tableWrap.className = 'billing-detail-table-wrap';
+                tableWrap.innerHTML = `
+                  <table class="billing-detail-table">
+                    <thead><tr>
+                      <th>Código</th><th>Descripción / Producto</th><th>Cantidad</th><th>Valor unitario</th>
+                      <th>Descuento</th><th>Impuesto</th><th>Total</th><th>Acción</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                  </table>`;
+                detailCard.insertBefore(title, source);
+                detailCard.insertBefore(tableWrap, source);
+              }
+
+              let totals = detailCard.querySelector('.billing-totals');
+              if (!totals) {
+                totals = document.createElement('div');
+                totals.className = 'billing-totals';
+                detailCard.appendChild(totals);
+              }
+
+              const money = (value) => {
+                const n = Number(String(value ?? '').replace(/[^0-9,.-]/g, '').replace(/\.(?=.*\.)/g, '').replace(',', '.'));
+                if (!Number.isFinite(n)) return String(value ?? '—');
+                return n.toLocaleString('es-CO', {style:'currency', currency:'COP', maximumFractionDigits:0});
+              };
+              const text = (el) => (el?.textContent || '').trim();
+              const data = (el, keys) => {
+                for (const key of keys) {
+                  const value = el?.dataset?.[key];
+                  if (value !== undefined && value !== '') return value;
+                }
+                return '';
+              };
+              const numeric = (value) => {
+                const n = Number(String(value ?? '').replace(/[^0-9,.-]/g, '').replace(/\.(?=.*\.)/g, '').replace(',', '.'));
+                return Number.isFinite(n) ? n : NaN;
+              };
+
+              const render = () => {
+                const currentRows = rows();
+                const tbody = tableWrap.querySelector('tbody');
+                tbody.innerHTML = '';
+
+                if (!currentRows.length) {
+                  const tr = document.createElement('tr');
+                  tr.innerHTML = '<td colspan="8" class="billing-empty">No hay productos agregados a la factura.</td>';
+                  tbody.appendChild(tr);
+                } else {
+                  currentRows.forEach((row) => {
+                    row.style.display = 'none';
+                    const children = Array.from(row.children);
+                    const productEl = children[0];
+                    const qtyEl = children[1];
+                    const totalEl = children[2];
+                    const actionEl = children[children.length - 1];
+                    const qtyInput = row.querySelector('input[type="number"]');
+                    const qtyText = qtyInput ? qtyInput.value : text(qtyEl);
+                    const totalText = data(row, ['total','lineTotal']) || text(totalEl);
+                    const totalNumber = numeric(totalText);
+                    const qtyNumber = numeric(qtyText);
+                    const unit = data(row, ['unitPrice','price','valorUnitario']) || (Number.isFinite(totalNumber) && Number.isFinite(qtyNumber) && qtyNumber ? String(totalNumber / qtyNumber) : '—');
+                    const code = data(row, ['code','codigo','sku']) || data(productEl, ['code','codigo','sku']) || '—';
+                    const discount = data(row, ['discount','descuento']) || '—';
+                    const tax = data(row, ['tax','iva','impuesto']) || '—';
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                      <td>${code}</td>
+                      <td class="billing-product-name">${text(productEl) || '—'}</td>
+                      <td class="billing-number">${qtyText || '1'}</td>
+                      <td class="billing-number">${unit === '—' ? '—' : money(unit)}</td>
+                      <td class="billing-number">${discount === '—' ? '—' : money(discount)}</td>
+                      <td class="billing-number">${tax === '—' ? '—' : money(tax)}</td>
+                      <td class="billing-number"><strong>${totalText || '—'}</strong></td>
+                      <td></td>`;
+                    const actionCell = tr.lastElementChild;
+                    const deleteButton = document.createElement('button');
+                    deleteButton.type = 'button';
+                    deleteButton.className = 'billing-delete';
+                    deleteButton.title = 'Eliminar ítem';
+                    deleteButton.textContent = '🗑️';
+                    deleteButton.addEventListener('click', () => {
+                      if (actionEl?.click) actionEl.click();
+                    });
+                    actionCell.appendChild(deleteButton);
+                    tbody.appendChild(tr);
+                  });
+                }
+
+                const originalTotals = detailCard.querySelector('.totals');
+                const findTotal = (pattern) => {
+                  if (!originalTotals) return '—';
+                  const line = Array.from(originalTotals.querySelectorAll('.totalline')).find((el) => pattern.test(text(el).toLowerCase()));
+                  if (!line) return '—';
+                  const parts = Array.from(line.children).map(text).filter(Boolean);
+                  return parts[parts.length - 1] || text(line) || '—';
+                };
+                const subtotal = findTotal(/subtotal/);
+                const discount = findTotal(/descuento/);
+                const tax = findTotal(/iva|impuesto/);
+                const total = findTotal(/total/);
+                totals.innerHTML = `
+                  <div class="billing-total-line"><span>Subtotal</span><strong>${subtotal}</strong></div>
+                  <div class="billing-total-line"><span>Descuento</span><strong>${discount}</strong></div>
+                  <div class="billing-total-line"><span>Impuestos (IVA)</span><strong>${tax}</strong></div>
+                  <div class="billing-total-line billing-grand"><strong>TOTAL A COBRAR</strong><strong>${total}</strong></div>`;
+              };
+
+              render();
+              if (!detailCard.dataset.billingObserver) {
+                const observer = new MutationObserver(() => requestAnimationFrame(render));
+                observer.observe(source, {childList:true, subtree:true, characterData:true, attributes:true});
+                const originalTotals = detailCard.querySelector('.totals');
+                if (originalTotals) observer.observe(originalTotals, {childList:true, subtree:true, characterData:true});
+                detailCard.dataset.billingObserver = '1';
+              }
+            };
+
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initBillingRedesign, {once:true});
+            else initBillingRedesign();
+            document.addEventListener('click', (event) => {
+              if (event.target.closest('[data-page="billing"], a[href="#billing"], button')) setTimeout(initBillingRedesign, 0);
+            });
+          })();
+          </script>'''
+
+              if '</head>' not in html or '</body>' not in html:
+                  raise SystemExit('index.html no contiene una estructura HTML esperada; no se modifica.')
+              html = html.replace('</head>', css + '\n</head>', 1)
+              html = html.replace('</body>', js + '\n</body>', 1)
+
+          # Safety checks: login and lateral navigation must remain present.
+          required = ['login-screen', 'sidebar', '#billing', 'Buscar producto o escanear código de barras']
+          missing = [item for item in required if item not in html]
+          if missing:
+              raise SystemExit('Fallo de seguridad: faltan marcadores existentes: ' + ', '.join(missing))
+          if html.count(marker) != 1:
+              raise SystemExit('Fallo de seguridad: marcador de rediseño duplicado.')
+
+          path.write_text(html, encoding='utf-8')
+          print('Billing redesign applied safely to index.html')
+
+      - name: Validate index.html markers
+        shell: bash
+        run: |
+          test -s index.html
+          grep -q 'VENTARA_BILLING_REDESIGN_V1' index.html
+          grep -q 'Detalle de la factura' index.html
+          grep -q 'TOTAL A COBRAR' index.html
+          grep -q 'login-screen' index.html
+          grep -q 'sidebar' index.html
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          class Parser(HTMLParser):
+              pass
+          Parser().feed(Path('index.html').read_text(encoding='utf-8'))
+          print('HTML parser validation: OK')
+          PY
+
+      - name: Commit index.html only
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then
+            echo "No index.html changes required."
+          else
+            git commit -m "feat: surgical billing module redesign"
+            git push origin HEAD:dev
+          fi
