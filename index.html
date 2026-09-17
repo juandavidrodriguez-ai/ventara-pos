@@ -578,63 +578,6 @@ function clock(){document.getElementById('clock').textContent=new Date().toLocal
   setInterval(normalizeCart,700);
 })();
 </script>
-  <script id="ventara-login-fix">
-  // Garantizar el evento submit e invocar la lógica sin depender de referencias rotas
-  document.addEventListener('DOMContentLoaded', () => {
-    const loginForm = document.getElementById('login-form') || document.querySelector('.login-card');
-    
-    // Asignar escuchador de eventos directamente al botón o formulario
-    document.querySelectorAll('button').forEach(btn => {
-      if (btn.textContent.includes('Iniciar sesión')) {
-        btn.onclick = (e) => {
-          e.preventDefault();
-          executeLogin();
-        };
-      }
-    });
-  });
-
-  async function executeLogin() {
-    const username = document.getElementById('loginUsername')?.value.trim().toLowerCase();
-    const password = document.getElementById('loginPassword')?.value;
-    const msg = document.getElementById('loginMsg');
-
-    if (!username || !password) {
-      if (msg) msg.textContent = 'Escribe usuario y contraseña.';
-      return;
-    }
-
-    if (msg) msg.textContent = 'Verificando…';
-
-    try {
-      let email = `${username}@login.ventara.app`;
-      
-      // Intentar autenticación con Supabase si está disponible
-      if (typeof supabaseClient !== 'undefined') {
-        let { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        if (data?.session && typeof loadAccount === 'function') {
-          await loadAccount();
-        }
-      }
-
-      if (msg) msg.textContent = '';
-      
-      // Forzar la transición de pantallas quitando los bloqueos
-      const loginScreen = document.getElementById('loginScreen');
-      const mainApp = document.getElementById('mainApp');
-
-      if (loginScreen) loginScreen.style.display = 'none';
-      if (mainApp) mainApp.style.display = 'flex';
-
-    } catch (e) {
-      console.error('Error en autenticación:', e);
-      if (msg) msg.textContent = e.message || 'Error al iniciar sesión.';
-    }
-  }
-
-  // Definir login en el scope global para responder a los clicks en HTML
-  window.login = executeLogin;
-</script>
-<script src="ventara-login-fix.js?v=20260917"></script>
-</body></html>
+  <script src="ventara-login-fix.js?v=20260917"></script>
+</body>
+</html>
