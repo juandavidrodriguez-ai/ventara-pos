@@ -3,7 +3,7 @@
 'use strict';
 const S={P:'Pendiente',D:'Entregado',C:'Cancelado'},q=s=>document.querySelector(s),root=()=>q('#orders');
 const DB_KEY='ventara_pos_v1';const db=()=>{if(window.db&&typeof window.db==='object')return window.db;try{const raw=localStorage.getItem(DB_KEY);return raw?JSON.parse(raw):null}catch{return null}};
-const esc=v=>String(v??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));
+const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const money=v=>{try{return typeof window.money==='function'?window.money(Number(v)||0):'$ '+Number(v||0).toLocaleString('es-CO')}catch{return '$ '+Number(v||0).toLocaleString('es-CO')}};
 const products=()=>{const d=db();return Array.isArray(d?.products)?d.products:[]};
 const customers=()=>{const d=db();return Array.isArray(d?.customers)?d.customers:Array.isArray(d?.clients)?d.clients:[]};
