@@ -94,8 +94,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout 4adc8e49c76dc863f185ad092019000ad25c4054 -- .github/workflows/github-pages.yml
-          git add index.html .github/workflows/github-pages.yml
+          git checkout 4adc8e49c76dc863f185ad092019000ad25c4054 -- .github/workflows/github-pages.yml README.md
+          git add index.html .github/workflows/github-pages.yml README.md
           git commit -m "fix(auth): add diagnostic logging and robust view transition in login()"
           git push origin HEAD:dev
 
