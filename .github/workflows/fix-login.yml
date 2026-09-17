@@ -1,0 +1,47 @@
+name: Surgical login fix
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-login:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'fix(login):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch only login function
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old = """async function login(){const username=document.getElementById('loginUsername').value.trim().toLowerCase();const password=document.getElementById('loginPassword').value;const msg=document.getElementById('loginMsg');if(!username||!password){msg.textContent='Escribe usuario y contraseña.';return}msg.textContent='Verificando…';try{let email='';try{const {data:emailData}=await supabaseClient.rpc('ventara_auth_email',{p_username:username});email=emailData?.email||emailData||''}catch(rpcError){console.warn('RPC no disponible; probando correo técnico',rpcError)}if(!email)email=`${username}@login.ventara.app`;let {data,error}=await supabaseClient.auth.signInWithPassword({email,password});if(error&&email!==`${username}@login.ventara.app`){const retry=await supabaseClient.auth.signInWithPassword({email:`${username}@login.ventara.app`,password});data=retry.data;error=retry.error}if(error)throw error;currentSession=data.session;await loadAccount();msg.textContent='';enterApp();toast('Sesión iniciada correctamente')}catch(e){console.error(e);msg.textContent='Usuario o contraseña incorrectos.'}}"""
+          new = """async function login(){const username=document.getElementById('loginUsername').value.trim().toLowerCase();const password=document.getElementById('loginPassword').value;const msg=document.getElementById('loginMsg');if(!username||!password){msg.textContent='Escribe usuario y contraseña.';return}msg.textContent='Verificando…';try{let email='';try{const {data:emailData}=await supabaseClient.rpc('ventara_auth_email',{p_username:username});email=(emailData?.email||emailData||'').toString().trim().toLowerCase()}catch(rpcError){console.warn('RPC no disponible; probando correo técnico',rpcError)}if(!email)email=`${username}@login.ventara.app`;let {data,error}=await supabaseClient.auth.signInWithPassword({email,password});if(error&&email!==`${username}@login.ventara.app`){const retry=await supabaseClient.auth.signInWithPassword({email:`${username}@login.ventara.app`,password});data=retry.data;error=retry.error}if(error)throw error;if(!data?.session)throw new Error('Supabase no devolvió una sesión válida.');currentSession=data.session;await loadAccount();msg.textContent='';enterApp();toast('Sesión iniciada correctamente')}catch(e){console.error('VENTARA login error:',e);if(currentSession&&!currentUser){try{await supabaseClient.auth.signOut()}catch(_){}currentSession=null}const code=e?.code||'';const detail=e?.message||'';if(code==='invalid_credentials'||code==='invalid_grant')msg.textContent='Usuario o contraseña incorrectos.';else if(detail)msg.textContent=`No se pudo iniciar sesión: ${detail}`;else msg.textContent='No se pudo iniciar sesión. Revisa la conexión con VENTARA.'}}"""
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected exactly 1 login function, found {s.count(old)}')
+          p.write_text(s.replace(old,new), encoding='utf-8')
+          PY
+      - name: Validate login patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          assert s.count("async function login(){") == 1
+          assert "VENTARA login error:" in s
+          assert "Supabase no devolvió una sesión válida." in s
+          print('Login patch validation OK')
+          PY
+      - name: Commit login fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m "fix(login): harden PC login error handling" || exit 0
+          git push
