@@ -30,6 +30,8 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
+          import subprocess
+          subprocess.run(['git','checkout','4adc8e49c76dc863f185ad092019000ad25c4054','--','index.html'], check=True)
           p = Path('index.html')
           s = p.read_text(encoding='utf-8')
 
@@ -51,7 +53,7 @@ jobs:
               raise SystemExit('login button handler not found')
 
           p.write_text(s, encoding='utf-8')
-          print('auth repair applied')
+          print('auth repair applied from clean baseline')
           PY
 
       - name: Validate JavaScript and auth wiring
@@ -72,6 +74,8 @@ jobs:
           for item in required:
               if item not in s:
                   raise SystemExit(f'missing validation target: {item}')
+          if 'VENTARA_BILLING_REDESIGN_V1' in s:
+              raise SystemExit('obsolete billing redesign marker leaked into auth repair')
           blocks = re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>', s, flags=re.S|re.I)
           if not blocks:
               raise SystemExit('no script blocks found')
@@ -84,11 +88,11 @@ jobs:
           print('auth wiring and JavaScript syntax validated')
           PY
 
-      - name: Commit auth repair and restore workflow
+      - name: Commit auth repair
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout HEAD^ -- .github/workflows/github-pages.yml
+          git checkout 4adc8e49c76dc863f185ad092019000ad25c4054 -- .github/workflows/github-pages.yml
           git add index.html .github/workflows/github-pages.yml
           git commit -m "fix(auth): add diagnostic logging and robust view transition in login()"
           git push origin HEAD:dev
