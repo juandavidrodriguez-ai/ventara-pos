@@ -2,7 +2,7 @@
 (()=>{
 'use strict';
 const S={P:'Pendiente',D:'Entregado',C:'Cancelado'},q=s=>document.querySelector(s),root=()=>q('#orders');
-const db=()=>window.db&&typeof window.db==='object'?window.db:null;
+const DB_KEY='ventara_pos_v1';const db=()=>{if(window.db&&typeof window.db==='object')return window.db;try{const raw=localStorage.getItem(DB_KEY);return raw?JSON.parse(raw):null}catch{return null}};
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const money=v=>{try{return typeof window.money==='function'?window.money(Number(v)||0):'$ '+Number(v||0).toLocaleString('es-CO')}catch{return '$ '+Number(v||0).toLocaleString('es-CO')}};
 const products=()=>{const d=db();return Array.isArray(d?.products)?d.products:[]};
@@ -15,7 +15,7 @@ const cp=c=>String(c?.phone||c?.telephone||c?.telefono||c?.mobile||c?.celular||c
 const ca=c=>String(c?.address||c?.direccion||c?.deliveryAddress||'');
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 const date=v=>{const a=String(v||'').split('-');return a.length===3?`${a[2]}/${a[1]}/${a[0]}`:String(v||'—')};
-const save=async()=>{try{if(typeof window.save==='function')window.save()}catch{}try{if(typeof window.cloudSave==='function')await window.cloudSave()}catch{}};
+const save=async()=>{if(window.db&&typeof window.db==='object'){try{if(typeof window.save==='function')window.save()}catch{}try{if(typeof window.cloudSave==='function')await window.cloudSave()}catch{}return}try{const d=db();if(d)localStorage.setItem(DB_KEY,JSON.stringify(d))}catch{}};
 const toast=m=>{try{if(typeof window.toast==='function')window.toast(m);else console.log('[VENTARA]',m)}catch{}};
 let draft=[];
 function alert(o){if(o.status===S.D)return ['ENTREGADO','g'];if(o.status===S.C)return ['CANCELADO','r'];if(!o.deliveryDate)return ['SIN FECHA','m'];const t=today();return o.deliveryDate===t?['¡ENTREGAR HOY!','w']:o.deliveryDate<t?['¡VENCIDO / RETRASADO!','r']:['PROGRAMADO','b']}
