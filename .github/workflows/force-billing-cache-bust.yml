@@ -1,0 +1,41 @@
+name: Force billing cache bust
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: write
+
+jobs:
+  cache-bust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+
+      - name: Add no-cache headers to index.html
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          tags = '''<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n<meta http-equiv="Pragma" content="no-cache">\n<meta http-equiv="Expires" content="0">'''
+          if 'http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"' not in s:
+              s = s.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n' + tags, 1)
+              p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit cache-busting change
+        shell: bash
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "index.html already contains the cache-busting meta tags"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "chore: force cache bust in index.html [skip ci]"
+          git push origin HEAD:dev
