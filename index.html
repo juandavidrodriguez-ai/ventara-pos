@@ -578,4 +578,40 @@ function clock(){document.getElementById('clock').textContent=new Date().toLocal
   setInterval(normalizeCart,700);
 })();
 </script>
+  <script id="ventara-login-fix">
+  async function login() {
+    const username = document.getElementById('loginUsername')?.value.trim().toLowerCase();
+    const password = document.getElementById('loginPassword')?.value;
+    const msg = document.getElementById('loginMsg');
+
+    if (!username || !password) {
+      if (msg) msg.textContent = 'Escribe usuario y contraseña.';
+      return;
+    }
+
+    if (msg) msg.textContent = 'Verificando…';
+
+    try {
+      let email = `${username}@login.ventara.app`;
+      let { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+      if (error) throw error;
+      if (!data?.session) throw new Error('Sesión no devuelta por Supabase.');
+
+      currentSession = data.session;
+      await loadAccount();
+
+      if (msg) msg.textContent = '';
+      
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'flex';
+      
+      if (typeof enterApp === 'function') enterApp();
+
+    } catch (e) {
+      console.error('Error en autenticación:', e);
+      if (msg) msg.textContent = e.message || 'Usuario o contraseña incorrectos.';
+    }
+  }
+</script>
 </body></html>
