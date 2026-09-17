@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -23,88 +23,13 @@ jobs:
     steps:
       - name: Checkout dev
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Apply surgical auth repair
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-          import subprocess
-          subprocess.run(['git','checkout','4adc8e49c76dc863f185ad092019000ad25c4054','--','index.html'], check=True)
-          p = Path('index.html')
-          s = p.read_text(encoding='utf-8')
-
-          old_enter = "function enterApp(){document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').style.display='flex';const top=document.getElementById('topRole');if(top)top.innerHTML=`${currentUser.name} · ${currentUser.role} <button class=\"logout-btn\" onclick=\"logout()\">Salir</button>`;document.querySelectorAll('.nav').forEach(b=>b.style.display=canAccess(b.dataset.page)?'flex':'none');document.getElementById('topBusiness').textContent=db.settings.business;document.getElementById('topLogo').src=db.settings.logo||VENTARA_LOGO;showPage('dashboard')}"
-          new_enter = "function enterApp(){const loginScreen=document.getElementById('loginScreen'),mainApp=document.getElementById('mainApp'),msg=document.getElementById('loginMsg');if(!currentUser||!currentCompanyId){if(msg)msg.textContent='No se pudo cargar la cuenta o la empresa de VENTARA.';if(mainApp)mainApp.style.display='none';if(loginScreen)loginScreen.style.display='flex';return false}if(loginScreen)loginScreen.style.display='none';if(mainApp)mainApp.style.display='flex';const top=document.getElementById('topRole');if(top)top.innerHTML=`${currentUser.name} · ${currentUser.role} <button class=\"logout-btn\" onclick=\"logout()\">Salir</button>`;document.querySelectorAll('.nav').forEach(b=>b.style.display=canAccess(b.dataset.page)?'flex':'none');document.getElementById('topBusiness').textContent=db.settings.business;document.getElementById('topLogo').src=db.settings.logo||VENTARA_LOGO;showPage('dashboard');return true}"
-          if old_enter not in s:
-              raise SystemExit('enterApp target not found')
-          s = s.replace(old_enter, new_enter, 1)
-
-          old_login = "async function login(){const username=document.getElementById('loginUsername').value.trim().toLowerCase();const password=document.getElementById('loginPassword').value;const msg=document.getElementById('loginMsg');if(!username||!password){msg.textContent='Escribe usuario y contraseña.';return}msg.textContent='Verificando…';try{let email='';try{const {data:emailData}=await supabaseClient.rpc('ventara_auth_email',{p_username:username});email=(emailData?.email||emailData||'').toString().trim().toLowerCase()}catch(rpcError){console.warn('RPC no disponible; probando correo técnico',rpcError)}if(!email)email=`${username}@login.ventara.app`;let {data,error}=await supabaseClient.auth.signInWithPassword({email,password});if(error&&email!==`${username}@login.ventara.app`){const retry=await supabaseClient.auth.signInWithPassword({email:`${username}@login.ventara.app`,password});data=retry.data;error=retry.error}if(error)throw error;if(!data?.session)throw new Error('Supabase no devolvió una sesión válida.');currentSession=data.session;await loadAccount();msg.textContent='';enterApp();toast('Sesión iniciada correctamente')}catch(e){console.error('VENTARA login error:',e);if(currentSession&&!currentUser){try{await supabaseClient.auth.signOut()}catch(_){}currentSession=null}const code=e?.code||'';const detail=e?.message||'';if(code==='invalid_credentials'||code==='invalid_grant')msg.textContent='Usuario o contraseña incorrectos.';else if(detail)msg.textContent=`No se pudo iniciar sesión: ${detail}`;else msg.textContent='No se pudo iniciar sesión. Revisa la conexión con VENTARA.'}}"
-          new_login = "async function login(){const username=document.getElementById('loginUsername').value.trim().toLowerCase();const password=document.getElementById('loginPassword').value;const msg=document.getElementById('loginMsg');console.log('Intentando login con:', username);if(!username||!password){msg.textContent='Escribe usuario y contraseña.';return}msg.textContent='Verificando…';try{let email='';try{const {data:emailData}=await supabaseClient.rpc('ventara_auth_email',{p_username:username});email=(emailData?.email||emailData||'').toString().trim().toLowerCase()}catch(rpcError){console.warn('RPC no disponible; probando correo técnico',rpcError)}if(!email)email=`${username}@login.ventara.app`;let {data,error}=await supabaseClient.auth.signInWithPassword({email,password});if(error&&email!==`${username}@login.ventara.app`){const retry=await supabaseClient.auth.signInWithPassword({email:`${username}@login.ventara.app`,password});data=retry.data;error=retry.error}if(error)throw error;if(!data?.session)throw new Error('Supabase no devolvió una sesión válida.');console.log('Sesión obtenida:', data.session);currentSession=data.session;await loadAccount();if(!currentUser||!currentCompanyId)throw new Error('No se pudo cargar la cuenta o la empresa de VENTARA.');msg.textContent='';if(!enterApp())throw new Error('No se pudo cambiar a la vista principal.');toast('Sesión iniciada correctamente')}catch(e){console.error('Error detallado en login:', e);if(currentSession&&!currentUser){try{await supabaseClient.auth.signOut()}catch(_){}currentSession=null}const code=e?.code||'';const detail=e?.message||'';if(code==='invalid_credentials'||code==='invalid_grant')msg.textContent='Usuario o contraseña incorrectos.';else if(detail)msg.textContent=`No se pudo iniciar sesión: ${detail}`;else msg.textContent='No se pudo iniciar sesión. Revisa la conexión con VENTARA.'}}"
-          if old_login not in s:
-              raise SystemExit('login target not found')
-          s = s.replace(old_login, new_login, 1)
-
-          if "onkeydown=\"if(event.key==='Enter')login()\"" not in s:
-              raise SystemExit('password Enter handler not found')
-          if "onclick=\"login()\">Iniciar sesión" not in s:
-              raise SystemExit('login button handler not found')
-
-          p.write_text(s, encoding='utf-8')
-          print('auth repair applied from clean baseline')
-          PY
-
-      - name: Validate JavaScript and auth wiring
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-          import re, subprocess, tempfile
-          s = Path('index.html').read_text(encoding='utf-8')
-          required = [
-              "console.log('Intentando login con:', username);",
-              "console.log('Sesión obtenida:', data.session);",
-              "console.error('Error detallado en login:', e);",
-              "if(!currentUser||!currentCompanyId)",
-              "document.getElementById('loginPassword')",
-              "onkeydown=\"if(event.key==='Enter')login()\"",
-              "onclick=\"login()\">Iniciar sesión"
-          ]
-          for item in required:
-              if item not in s:
-                  raise SystemExit(f'missing validation target: {item}')
-          if 'VENTARA_BILLING_REDESIGN_V1' in s:
-              raise SystemExit('obsolete billing redesign marker leaked into auth repair')
-          blocks = re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>', s, flags=re.S|re.I)
-          if not blocks:
-              raise SystemExit('no script blocks found')
-          for i, code in enumerate(blocks, 1):
-              f = tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8')
-              f.write(code); f.close()
-              r = subprocess.run(['node','--check',f.name], capture_output=True, text=True)
-              if r.returncode:
-                  raise SystemExit(f'JS syntax error in script {i}: {r.stderr}')
-          print('auth wiring and JavaScript syntax validated')
-          PY
-
-      - name: Commit auth repair
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout 4adc8e49c76dc863f185ad092019000ad25c4054 -- .github/workflows/github-pages.yml README.md
-          git add index.html .github/workflows/github-pages.yml README.md
-          git commit -m "fix(auth): add diagnostic logging and robust view transition in login()"
-          git push origin HEAD:dev
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
-      - name: Upload site
+      - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
