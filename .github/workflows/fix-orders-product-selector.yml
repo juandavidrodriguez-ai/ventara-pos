@@ -38,7 +38,7 @@ jobs:
       - name: Validate JavaScript syntax
         run: node --check ventara-orders-evolution.js
 
-      - name: Commit patch
+      - name: Commit and push without overwriting concurrent changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -46,4 +46,11 @@ jobs:
           git diff --cached --check
           git diff --cached -- ventara-orders-evolution.js
           git commit -m "fix(orders): load products from active Ventara state"
-          git push origin main
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main && git push origin main && exit 0
+            git rebase --abort || true
+            sleep 2
+          done
+          echo "Could not publish without overwriting concurrent main changes"
+          exit 1
