@@ -1,6 +1,8 @@
 name: Surgical Orders Product Selector Fix
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
