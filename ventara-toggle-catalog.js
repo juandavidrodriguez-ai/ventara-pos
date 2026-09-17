@@ -5,8 +5,6 @@
   const BUTTON_ID = 'ventara-toggle-catalog-btn';
   const POS_ID = 'pos';
 
-  // Estado independiente del DOM para que renderPOS/filterPOS no puedan
-  // volver a ocultar el catálogo después de que el usuario lo muestre.
   if (typeof window.__ventaraCatalogVisible !== 'boolean') {
     window.__ventaraCatalogVisible = false;
   }
@@ -21,16 +19,19 @@
     const button = getButton();
 
     if (catalog) {
-      catalog.style.setProperty(
-        'display',
-        visible ? '' : 'none',
-        'important'
-      );
-      catalog.dataset.ventaraCatalogHidden = String(!visible);
+      const desiredDisplay = visible ? '' : 'none';
+      if (catalog.style.display !== desiredDisplay) {
+        catalog.style.setProperty('display', desiredDisplay, 'important');
+      }
+      const desiredHidden = String(!visible);
+      if (catalog.dataset.ventaraCatalogHidden !== desiredHidden) {
+        catalog.dataset.ventaraCatalogHidden = desiredHidden;
+      }
     }
 
     if (button) {
-      button.textContent = visible ? 'Ocultar catálogo' : 'Mostrar catálogo';
+      const text = visible ? 'Ocultar catálogo' : 'Mostrar catálogo';
+      if (button.textContent !== text) button.textContent = text;
       button.setAttribute('aria-expanded', String(visible));
     }
   };
@@ -60,7 +61,6 @@
         'font: inherit'
       ].join(';');
 
-      // Delegación por botón: siempre trabaja con el #productGrid actual.
       button.addEventListener('click', () => {
         setCatalogVisible(!window.__ventaraCatalogVisible);
       });
@@ -76,43 +76,34 @@
     if (!(input instanceof HTMLInputElement)) return;
     if (!input.closest('#' + POS_ID)) return;
 
-    const value = String(input.value || '').trim();
-
-    // Cuando el cajero busca por nombre, SKU o código de barras,
-    // mostramos únicamente los resultados filtrados por el sistema original.
-    if (value) {
+    if (String(input.value || '').trim()) {
       setCatalogVisible(true);
     }
   };
 
-  const sync = () => {
-    ensureToggleButton();
+  let syncScheduled = false;
 
-    // IMPORTANTE: solo sincronizamos el estado que eligió el usuario.
-    // No usamos las mutaciones internas del productGrid para volver a ocultarlo.
-    const catalog = getCatalog();
-    if (catalog) {
-      catalog.style.setProperty(
-        'display',
-        window.__ventaraCatalogVisible ? '' : 'none',
-        'important'
-      );
-      catalog.dataset.ventaraCatalogHidden =
-        String(!window.__ventaraCatalogVisible);
-    }
+  const sync = () => {
+    syncScheduled = false;
+    ensureToggleButton();
+  };
+
+  const scheduleSync = () => {
+    if (syncScheduled) return;
+    syncScheduled = true;
+    requestAnimationFrame(sync);
   };
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', sync, { once: true });
+    document.addEventListener('DOMContentLoaded', scheduleSync, { once: true });
   } else {
-    sync();
+    scheduleSync();
   }
 
-  // Compatible con el buscador y con lectores USB/HID que escriben como teclado.
   document.addEventListener('input', revealCatalogForSearch, true);
   document.addEventListener('change', revealCatalogForSearch, true);
 
-  const observer = new MutationObserver(sync);
+  const observer = new MutationObserver(scheduleSync);
   observer.observe(document.documentElement, {
     subtree: true,
     childList: true
