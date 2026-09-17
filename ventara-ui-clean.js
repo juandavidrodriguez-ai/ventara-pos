@@ -1,13 +1,11 @@
 (() => {
   'use strict';
 
-  const hideButton = (button) => {
-    if (!button) return;
-    button.style.setProperty('display', 'none', 'important');
-  };
+  const hideFacturarButtons = () => {
+    const pos = document.getElementById('pos');
+    if (!pos) return;
 
-  const cleanVentaraUI = () => {
-    const candidates = document.querySelectorAll(
+    const candidates = pos.querySelectorAll(
       'button, a, [role="button"], input[type="button"], input[type="submit"]'
     );
 
@@ -17,32 +15,26 @@
         .trim()
         .toLowerCase();
 
-      const id = (element.id || '').toLowerCase();
-      const className = (
-        typeof element.className === 'string'
-          ? element.className
-          : ''
-      ).toLowerCase();
-
       if (
         text === '+ nuevo artículo' ||
         text === 'nuevo artículo' ||
         text === 'categorías' ||
-        id.includes('nuevo-articulo') ||
-        id.includes('nuevoarticulo') ||
-        id.includes('categor') ||
-        className.includes('nuevo-articulo') ||
-        className.includes('nuevoarticulo') ||
-        className.includes('categor')
+        text === '📂 categorías'
       ) {
-        hideButton(element);
+        element.style.setProperty('display', 'none', 'important');
       }
     });
   };
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', cleanVentaraUI, { once: true });
+    document.addEventListener('DOMContentLoaded', hideFacturarButtons, { once: true });
   } else {
-    cleanVentaraUI();
+    hideFacturarButtons();
   }
+
+  const observer = new MutationObserver(() => hideFacturarButtons());
+  observer.observe(document.documentElement, {
+    subtree: true,
+    childList: true
+  });
 })();
