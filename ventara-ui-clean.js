@@ -273,3 +273,6 @@
 /* VENTARA: carga aislada del ajuste visual de columnas de Facturación. */
 (()=>{if(document.querySelector('script[data-ventara-billing-layout-fix]'))return;const s=document.createElement('script');s.src='ventara-billing-layout-fix.js?v=20260918-40-60';s.async=false;s.dataset.ventaraBillingLayoutFix='1';document.head.appendChild(s);})();
 /* VENTARA billing layout deployment sync: 20260918-1008 */
+
+/* VENTARA: carga aislada del parche de edición de Categorías sin tocar index.html. */
+(()=>{if(document.querySelector('script[data-ventara-categories-edit-fix]'))return;const s=document.createElement('script');s.src='ventara-categories-edit-fix.js?v=20260918';s.async=false;s.dataset.ventaraCategoriesEditFix='1';document.head.appendChild(s);})();
