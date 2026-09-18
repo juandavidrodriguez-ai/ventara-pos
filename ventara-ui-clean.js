@@ -284,3 +284,7 @@
 
 /* VENTARA: carga aislada de unidades de venta @ y 1/2 @. */
 (()=>{if(document.querySelector('script[data-ventara-units-fix]'))return;const s=document.createElement('script');s.src='ventara-units-fix.js?v=20260918';s.async=false;s.dataset.ventaraUnitsFix='1';document.head.appendChild(s);})();
+
+
+/* VENTARA: carga aislada del parche de selección de texto con mouse. */
+(()=>{if(document.querySelector('script[data-ventara-mouse-selection-fix]'))return;const s=document.createElement('script');s.src='ventara-mouse-selection-fix.js?v=20260918';s.async=false;s.dataset.ventaraMouseSelectionFix='1';document.head.appendChild(s);})();
