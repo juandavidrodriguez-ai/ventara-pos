@@ -2,15 +2,19 @@
   'use strict';
 
   const STYLE_ID = 'ventara-modal-selection-fix';
+  const BODY_CLASS = 'ventara-modal-selection-active';
 
   /*
-   * Ajuste transversal y no destructivo para los formularios emergentes.
+   * Ajuste transversal para los formularios emergentes.
    * No modifica funciones globales ni el contenido de los formularios.
-   * Se aplica únicamente mientras existe un .modal.show.
+   * La corrección ataca el salto de la página durante la selección:
+   * el modal es el único que puede desplazarse mientras está abierto.
    */
-  const applyFix = () => {
-    const modals = document.querySelectorAll('.modal.show');
-    if (!modals.length) return;
+
+  const getOpenModals = () => document.querySelectorAll('.modal.show');
+
+  const applyModalState = () => {
+    const modals = getOpenModals();
 
     modals.forEach((modal) => {
       const box = modal.querySelector('.modalbox');
@@ -20,15 +24,45 @@
       box.dataset.ventaraModalSelectionFix = 'true';
     });
 
+    const active = modals.length > 0;
+    document.documentElement.classList.toggle(BODY_CLASS, active);
+  };
+
+  const restoreDocumentPosition = () => {
+    if (!document.documentElement.classList.contains(BODY_CLASS)) return;
+
+    /*
+     * Un formulario emergente usa position:fixed. Si el navegador intenta
+     * desplazar el documento al mantener pulsado/seleccionar texto, volvemos
+     * inmediatamente a la posición anterior sin interferir con la selección.
+     */
+    const y = Number(document.documentElement.dataset.ventaraScrollY || 0);
+    if (window.scrollY !== y) window.scrollTo(0, y);
+  };
+
+  const captureDocumentPosition = () => {
+    if (!getOpenModals().length) return;
+    document.documentElement.dataset.ventaraScrollY = String(window.scrollY);
+  };
+
+  const installStyle = () => {
     if (document.getElementById(STYLE_ID)) return;
 
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      /* El desplazamiento queda contenido dentro de la ventana emergente. */
+      /*
+       * Bloquea únicamente el scroll de fondo cuando hay un modal abierto.
+       * El .modalbox conserva su scroll interno normal.
+       */
+      html.ventara-modal-selection-active,
+      body.ventara-modal-selection-active {
+        overflow: hidden !important;
+        overscroll-behavior: none !important;
+      }
+
       .modal[data-ventara-modal-selection-fix="true"] {
         overscroll-behavior: contain !important;
-        overflow: hidden !important;
       }
 
       .modal[data-ventara-modal-selection-fix="true"] .modalbox {
@@ -38,7 +72,6 @@
         -webkit-overflow-scrolling: touch;
       }
 
-      /* Mantiene disponible la selección normal de texto para copiar/borrar. */
       .modal[data-ventara-modal-selection-fix="true"] input,
       .modal[data-ventara-modal-selection-fix="true"] textarea,
       .modal[data-ventara-modal-selection-fix="true"] select {
@@ -46,6 +79,7 @@
         -webkit-user-select: text !important;
       }
     `;
+
     document.head.appendChild(style);
   };
 
@@ -57,7 +91,9 @@
 
     requestAnimationFrame(() => {
       scheduled = false;
-      applyFix();
+      installStyle();
+      captureDocumentPosition();
+      applyModalState();
     });
   };
 
@@ -68,12 +104,23 @@
   }
 
   /*
-   * Observa únicamente cambios del DOM para detectar la apertura/reconstrucción
-   * de los modales. No intercepta clics, teclas ni funciones de negocio.
+   * No interceptamos clics ni teclas. Solo detectamos apertura/reconstrucción
+   * de un modal y evitamos que el documento de fondo se mueva.
    */
   const observer = new MutationObserver(schedule);
   observer.observe(document.documentElement, {
     subtree: true,
-    childList: true
+    childList: true,
+    attributes: true,
+    attributeFilter: ['class']
   });
+
+  /*
+   * El navegador puede intentar mover la página durante una selección táctil.
+   * Restauramos únicamente el scroll del documento; el scroll interno del
+   * formulario sigue disponible.
+   */
+  document.addEventListener('selectionchange', restoreDocumentPosition, true);
+  document.addEventListener('touchstart', captureDocumentPosition, true);
+  document.addEventListener('pointerdown', captureDocumentPosition, true);
 })();
