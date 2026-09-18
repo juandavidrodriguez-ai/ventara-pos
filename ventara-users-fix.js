@@ -87,7 +87,7 @@
       showError(new Error('Escribe el nombre'));
       return false;
     }
-    if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+    if (!/^[a-z0-9._-]{2,30}$/.test(username)) {
       showError(new Error('Usuario inválido'));
       return false;
     }
