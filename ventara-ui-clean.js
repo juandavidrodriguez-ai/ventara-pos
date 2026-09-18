@@ -36,7 +36,7 @@
   const client = () => { try { return supabaseClient; } catch (_) { return null; } };
   const appDb = () => { try { return db; } catch (_) { return null; } };
   const admin = () => { try { return currentUser?.role === 'Administrador'; } catch (_) { return false; } };
-  const esc = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
+  const esc = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
   const refresh = () => { try { if (typeof renderUsers === 'function') renderUsers(); } catch (_) {} };
 
@@ -145,6 +145,7 @@
     }
   }
 
+
   async function createUserWithoutGenericSave(event) {
     if (event?.preventDefault) event.preventDefault();
     if (isSubmittingUser) return;
@@ -192,6 +193,7 @@
   }
 
   window.saveUser = createUserWithoutGenericSave;
+
   window.editVentaraUser = editUser;
   window.saveEditedUser = saveEditedUser;
   window.deleteVentaraUser = deleteUser;
@@ -274,6 +276,7 @@
 
 /* VENTARA: carga aislada del parche de edición de Categorías sin tocar index.html. */
 (()=>{if(document.querySelector('script[data-ventara-categories-edit-fix]'))return;const s=document.createElement('script');s.src='ventara-categories-edit-fix.js?v=20260918';s.async=false;s.dataset.ventaraCategoriesEditFix='1';document.head.appendChild(s);})();
+
 
 /* VENTARA: carga aislada del valor predeterminado editable de Observaciones de Cotizaciones. */
 (()=>{if(document.querySelector('script[data-ventara-quotes-observation-default]'))return;const s=document.createElement('script');s.src='ventara-quotes-observations-fix.js?v=20260918';s.async=false;s.dataset.ventaraQuotesObservationDefault='1';document.head.appendChild(s);})();
