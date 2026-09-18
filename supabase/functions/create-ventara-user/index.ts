@@ -38,6 +38,56 @@ Deno.serve(async (req) => {
       throw new Error("Solo un Administrador puede administrar usuarios");
     }
 
+    async function syncUsersState() {
+      const { data: accounts, error: accountsError } = await adminClient
+        .from("ventara_accounts")
+        .select("user_id, username, full_name, role, active")
+        .eq("company_id", callerAccount.company_id)
+        .order("created_at", { ascending: true });
+
+      if (accountsError) throw accountsError;
+
+      const { data: stateRow, error: stateError } = await adminClient
+        .from("ventara_state")
+        .select("id, state")
+        .eq("company_id", callerAccount.company_id)
+        .maybeSingle();
+
+      if (stateError) throw stateError;
+
+      const previousState = stateRow?.state && typeof stateRow.state === "object" ? stateRow.state : {};
+      const users = (accounts || []).map((u) => ({
+        id: u.user_id,
+        name: u.full_name,
+        username: u.username,
+        role: u.role,
+        active: u.active,
+      }));
+
+      const nextState = { ...previousState, users };
+
+      if (stateRow?.id) {
+        const { error } = await adminClient
+          .from("ventara_state")
+          .update({
+            state: nextState,
+            updated_at: new Date().toISOString(),
+            updated_by: caller.id,
+          })
+          .eq("id", stateRow.id)
+          .eq("company_id", callerAccount.company_id);
+        if (error) throw error;
+      } else {
+        const { error } = await adminClient.from("ventara_state").insert({
+          company_id: callerAccount.company_id,
+          state: nextState,
+          updated_at: new Date().toISOString(),
+          updated_by: caller.id,
+        });
+        if (error) throw error;
+      }
+    }
+
     const body = await req.json();
     const action = String(body.action || "create");
 
@@ -85,6 +135,8 @@ Deno.serve(async (req) => {
         throw accountError;
       }
 
+      await syncUsersState();
+
       return new Response(JSON.stringify({
         success: true, action: "create", userId: newUserId, username, fullName, role, active,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -120,6 +172,8 @@ Deno.serve(async (req) => {
 
       if (updateError) throw updateError;
 
+      await syncUsersState();
+
       return new Response(JSON.stringify({
         success: true, action: "update", userId, username: targetAccount.username,
         fullName, role, active,
@@ -127,8 +181,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === "delete") {
-      await adminClient.from("company_users").delete()
+      const { error: companyUserDeleteError } = await adminClient.from("company_users").delete()
         .eq("user_id", userId).eq("company_id", callerAccount.company_id);
+      if (companyUserDeleteError) throw companyUserDeleteError;
 
       const { error: accountDeleteError } = await adminClient
         .from("ventara_accounts").delete()
@@ -148,6 +203,8 @@ Deno.serve(async (req) => {
         });
         throw authDeleteError;
       }
+
+      await syncUsersState();
 
       return new Response(JSON.stringify({
         success: true, action: "delete", userId, username: targetAccount.username,
