@@ -11,7 +11,7 @@
     style.textContent = `
       /* VENTARA: redistribución visual exclusiva de Facturación. */
       .pos-shell{
-        grid-template-columns:minmax(0,40fr) minmax(0,60fr)!important;
+        grid-template-columns:minmax(0,40%) minmax(0,60%)!important;
         align-items:start;
       }
 
