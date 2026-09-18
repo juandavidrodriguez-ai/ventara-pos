@@ -70,8 +70,6 @@
     }
 
     const button = findSaveButton();
-    isSubmitting = true;
-    setSaving(button, true);
 
     const name = String(get('u_name')?.value || '').trim();
     const username = String(get('u_username')?.value || '').trim().toLowerCase();
@@ -80,12 +78,29 @@
     const role = String(get('u_role')?.value || 'Cajero');
     const active = get('u_active')?.value === '1';
 
-    try {
-      if (!name) throw new Error('Escribe el nombre');
-      if (!/^[a-z0-9._-]{3,30}$/.test(username)) throw new Error('Usuario inválido');
-      if (password.length < 6) throw new Error('La contraseña debe tener mínimo 6 caracteres');
-      if (password !== password2) throw new Error('Las contraseñas no coinciden');
+    // Validar antes de bloquear el formulario evita dejar "Guardando..." pegado
+    // cuando el problema es simplemente un dato incompleto o inválido.
+    if (!name) {
+      showError(new Error('Escribe el nombre'));
+      return false;
+    }
+    if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+      showError(new Error('Usuario inválido'));
+      return false;
+    }
+    if (password.length < 6) {
+      showError(new Error('La contraseña debe tener mínimo 6 caracteres'));
+      return false;
+    }
+    if (password !== password2) {
+      showError(new Error('Las contraseñas no coinciden'));
+      return false;
+    }
 
+    isSubmitting = true;
+    setSaving(button, true);
+
+    try {
       const client = getClient();
       if (!client) throw new Error('Sesión de VENTARA no disponible');
 
