@@ -288,3 +288,7 @@
 
 /* VENTARA: carga aislada del parche de selección de texto con mouse. */
 (()=>{if(document.querySelector('script[data-ventara-mouse-selection-fix]'))return;const s=document.createElement('script');s.src='ventara-mouse-selection-fix.js?v=20260918';s.async=false;s.dataset.ventaraMouseSelectionFix='1';document.head.appendChild(s);})();
+
+
+/* VENTARA: carga aislada del cierre de modales con tecla Escape. */
+(()=>{if(document.querySelector('script[data-ventara-escape-key-fix]'))return;const s=document.createElement('script');s.src='ventara-escape-key-fix.js?v=20260918';s.async=false;s.dataset.ventaraEscapeKeyFix='1';document.head.appendChild(s);})();
