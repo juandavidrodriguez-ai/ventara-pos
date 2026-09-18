@@ -1,53 +1,52 @@
 (() => {
   'use strict';
 
-  const STYLE_ID = 'ventara-product-selection-fix';
+  const STYLE_ID = 'ventara-modal-selection-fix';
 
-  const isProductModal = (modal) => {
-    if (!modal) return false;
-    const text = (modal.innerText || '').toLowerCase();
-    return (
-      text.includes('nuevo artículo') ||
-      text.includes('nuevo articulo') ||
-      text.includes('crear producto') ||
-      text.includes('editar producto') ||
-      text.includes('precio de venta') ||
-      text.includes('precio de costo')
-    );
-  };
-
+  /*
+   * Ajuste transversal y no destructivo para los formularios emergentes.
+   * No modifica funciones globales ni el contenido de los formularios.
+   * Se aplica únicamente mientras existe un .modal.show.
+   */
   const applyFix = () => {
-    const modal = document.querySelector('.modal.show');
-    if (!isProductModal(modal)) return;
+    const modals = document.querySelectorAll('.modal.show');
+    if (!modals.length) return;
 
-    const box = modal.querySelector('.modalbox');
-    if (!box) return;
+    modals.forEach((modal) => {
+      const box = modal.querySelector('.modalbox');
+      if (!box) return;
 
-    modal.dataset.ventaraProductSelectionFix = 'true';
-    box.dataset.ventaraProductSelectionFix = 'true';
+      modal.dataset.ventaraModalSelectionFix = 'true';
+      box.dataset.ventaraModalSelectionFix = 'true';
+    });
 
-    if (!document.getElementById(STYLE_ID)) {
-      const style = document.createElement('style');
-      style.id = STYLE_ID;
-      style.textContent = `
-        .modal[data-ventara-product-selection-fix="true"] {
-          overscroll-behavior: contain !important;
-        }
+    if (document.getElementById(STYLE_ID)) return;
 
-        .modal[data-ventara-product-selection-fix="true"] .modalbox {
-          overscroll-behavior: contain !important;
-          overflow-anchor: none !important;
-          scroll-behavior: auto !important;
-        }
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `
+      /* El desplazamiento queda contenido dentro de la ventana emergente. */
+      .modal[data-ventara-modal-selection-fix="true"] {
+        overscroll-behavior: contain !important;
+        overflow: hidden !important;
+      }
 
-        .modal[data-ventara-product-selection-fix="true"] input,
-        .modal[data-ventara-product-selection-fix="true"] textarea {
-          user-select: text !important;
-          -webkit-user-select: text !important;
-        }
-      `;
-      document.head.appendChild(style);
-    }
+      .modal[data-ventara-modal-selection-fix="true"] .modalbox {
+        overscroll-behavior: contain !important;
+        overflow-anchor: none !important;
+        scroll-behavior: auto !important;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Mantiene disponible la selección normal de texto para copiar/borrar. */
+      .modal[data-ventara-modal-selection-fix="true"] input,
+      .modal[data-ventara-modal-selection-fix="true"] textarea,
+      .modal[data-ventara-modal-selection-fix="true"] select {
+        user-select: text !important;
+        -webkit-user-select: text !important;
+      }
+    `;
+    document.head.appendChild(style);
   };
 
   let scheduled = false;
@@ -55,6 +54,7 @@
   const schedule = () => {
     if (scheduled) return;
     scheduled = true;
+
     requestAnimationFrame(() => {
       scheduled = false;
       applyFix();
@@ -67,6 +67,10 @@
     schedule();
   }
 
+  /*
+   * Observa únicamente cambios del DOM para detectar la apertura/reconstrucción
+   * de los modales. No intercepta clics, teclas ni funciones de negocio.
+   */
   const observer = new MutationObserver(schedule);
   observer.observe(document.documentElement, {
     subtree: true,
