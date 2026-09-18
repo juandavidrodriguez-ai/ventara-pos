@@ -64,7 +64,10 @@
     if (isSubmitting) return false;
 
     const current = getCurrentUser();
-    if (current?.role !== 'Administrador') {
+    const currentRole = String(current?.role || '').trim().toLowerCase();
+    // Acepta Administrador/admin sin importar mayúsculas. Si la sesión no expone rol,
+    // no bloquea aquí: la autorización definitiva continúa en el Edge Function de Supabase.
+    if (currentRole && currentRole !== 'administrador' && currentRole !== 'admin') {
       showError(new Error('Solo un Administrador puede crear usuarios'));
       return false;
     }
