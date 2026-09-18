@@ -292,3 +292,7 @@
 
 /* VENTARA: carga aislada del cierre de modales con tecla Escape. */
 (()=>{if(document.querySelector('script[data-ventara-escape-key-fix]'))return;const s=document.createElement('script');s.src='ventara-escape-key-fix.js?v=20260918';s.async=false;s.dataset.ventaraEscapeKeyFix='1';document.head.appendChild(s);})();
+
+
+/* VENTARA: carga aislada de Enter para agregar productos en Facturar. */
+(()=>{if(document.querySelector('script[data-ventara-enter-add-product-fix]'))return;const s=document.createElement('script');s.src='ventara-enter-add-product-fix.js?v=20260918';s.async=false;s.dataset.ventaraEnterAddProductFix='1';document.head.appendChild(s);})();
