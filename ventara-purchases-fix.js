@@ -9,8 +9,8 @@
   };
   const todaySafe = () => typeof window.today === 'function' ? window.today() : new Date().toISOString().slice(0,10);
   const productName = p => String(p?.name || p?.nombre || 'Producto');
-  const supplierNameSafe = id => (window.db?.suppliers || []).find(s => String(s.id) === String(id))?.name || '';
-  const productById = id => (window.db?.products || []).find(p => String(p.id) === String(id));
+  const supplierNameSafe = id => (db?.suppliers || []).find(s => String(s.id) === String(id))?.name || '';
+  const productById = id => (db?.products || []).find(p => String(p.id) === String(id));
   const notify = m => { try { if (typeof window.toast === 'function') window.toast(m); } catch (_) {} };
 
   let purchaseDraft = [];
@@ -21,7 +21,7 @@
 
   function renderPurchasesFixed() {
     const root = document.getElementById('purchases');
-    if (!root || !window.db) return;
+    if (!root || !db) return;
 
     const rows = (Array.isArray(db.purchases) ? db.purchases : []).map((x, index) => {
       const cancelled = String(x.status||'').toLowerCase() === 'anulada';
@@ -126,7 +126,7 @@
   }
 
   function savePurchaseFixed() {
-    if (!window.db) return notify('Los datos aún no están disponibles.');
+    if (!db) return notify('Los datos aún no están disponibles.');
     if (!purchaseDraft.length) return notify('Agrega al menos un producto a la compra.');
 
     const supplier = (db.suppliers || []).find(s => String(s.id) === String(document.getElementById('b_sup')?.value));
@@ -152,7 +152,7 @@
         qty: Number(item.qty || 0),
         balance: p.stock,
         cost: Number(item.cost || 0),
-        user: window.currentUser?.name || 'Sistema'
+        user: currentUser?.name || 'Sistema'
       });
     });
 
@@ -169,7 +169,7 @@
       status: 'Registrada',
       invoice: invoice || '',
       items: purchaseDraft.map(x => ({productId:x.productId, qty:Number(x.qty), cost:Number(x.cost)})),
-      createdBy: window.currentUser?.id || null
+      createdBy: currentUser?.id || null
     });
 
     try { if (typeof window.log === 'function') window.log('Compra registrada', number); } catch (_) {}
@@ -228,7 +228,7 @@
         qty: -qty,
         balance: prod.stock,
         cost: Number(item.cost || prod.cost || 0),
-        user: window.currentUser?.name || 'Sistema'
+        user: currentUser?.name || 'Sistema'
       });
       reversed = true;
     });
@@ -240,7 +240,7 @@
 
     p.status = 'Anulada';
     p.cancelledAt = new Date().toISOString();
-    p.cancelledBy = window.currentUser?.id || null;
+    p.cancelledBy = currentUser?.id || null;
     try { if (typeof window.log === 'function') window.log('Compra anulada', p.number || ''); } catch (_) {}
     window.save();
     notify(reversed ? 'Compra anulada e inventario revertido.' : 'Compra anulada.');
