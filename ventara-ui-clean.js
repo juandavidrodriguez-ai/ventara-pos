@@ -271,4 +271,4 @@
 (()=>{if(document.querySelector('script[data-ventara-number-format-fix]'))return;const s=document.createElement('script');s.src='ventara-number-format-fix.js?v=20260918';s.async=false;s.dataset.ventaraNumberFormatFix='1';document.head.appendChild(s);})();
 
 /* VENTARA: carga aislada del ajuste visual de columnas de Facturación. */
-(()=>{if(document.querySelector('script[data-ventara-billing-layout-fix]'))return;const s=document.createElement('script');s.src='ventara-billing-layout-fix.js?v=20260918';s.async=false;s.dataset.ventaraBillingLayoutFix='1';document.head.appendChild(s);})();
+(()=>{if(document.querySelector('script[data-ventara-billing-layout-fix]'))return;const s=document.createElement('script');s.src='ventara-billing-layout-fix.js?v=20260918-40-60';s.async=false;s.dataset.ventaraBillingLayoutFix='1';document.head.appendChild(s);})();
