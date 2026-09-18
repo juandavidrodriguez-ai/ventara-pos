@@ -1,5 +1,6 @@
 /* VENTARA POS - Valor predeterminado editable para Observaciones en Nueva cotización.
-   Cambio aislado: no toca index.html, Supabase, guardado ni generación de comprobantes. */
+   Cambio aislado: no toca index.html, Supabase, guardado ni generación de comprobantes.
+   Trigger de sincronización Vercel: 2026-09-18. */
 (() => {
   'use strict';
 
