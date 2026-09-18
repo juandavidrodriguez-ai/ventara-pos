@@ -280,3 +280,7 @@
 
 /* VENTARA: carga aislada del valor predeterminado editable de Observaciones de Cotizaciones. */
 (()=>{if(document.querySelector('script[data-ventara-quotes-observation-default]'))return;const s=document.createElement('script');s.src='ventara-quotes-observations-fix.js?v=20260918';s.async=false;s.dataset.ventaraQuotesObservationDefault='1';document.head.appendChild(s);})();
+
+
+/* VENTARA: carga aislada de unidades de venta @ y 1/2 @. */
+(()=>{if(document.querySelector('script[data-ventara-units-fix]'))return;const s=document.createElement('script');s.src='ventara-units-fix.js?v=20260918';s.async=false;s.dataset.ventaraUnitsFix='1';document.head.appendChild(s);})();
