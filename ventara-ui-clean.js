@@ -266,3 +266,6 @@
 
 /* VENTARA: carga aislada del parche de Compras sin tocar index.html. */
 (()=>{if(document.querySelector('script[data-ventara-purchases-fix]'))return;const s=document.createElement('script');s.src='ventara-purchases-fix.js?v=20260918';s.async=false;s.dataset.ventaraPurchasesFix='1';document.head.appendChild(s);})();
+
+/* VENTARA: carga aislada del formateador numérico visual. No modifica valores internos. */
+(()=>{if(document.querySelector('script[data-ventara-number-format-fix]'))return;const s=document.createElement('script');s.src='ventara-number-format-fix.js?v=20260918';s.async=false;s.dataset.ventaraNumberFormatFix='1';document.head.appendChild(s);})();
