@@ -30,6 +30,8 @@
 
   let originalRenderUsers = null;
   let syncingUsers = false;
+  let isSubmittingUser = false;
+  let lastUsersSignature = '';
 
   const client = () => { try { return supabaseClient; } catch (_) { return null; } };
   const appDb = () => { try { return db; } catch (_) { return null; } };
@@ -52,7 +54,17 @@
       const users = data?.state?.users;
       if (!Array.isArray(users)) return;
 
-      d.users = users.map(u => ({ ...u, permissions: ROLE_PERMISSIONS_VIEW[u.role] || [] }));
+      const normalizedUsers = users.map(u => ({
+        ...u,
+        permissions: ROLE_PERMISSIONS_VIEW[u.role] || []
+      }));
+      const signature = JSON.stringify(normalizedUsers.map(u => ({
+        id:u.id, name:u.name, username:u.username, role:u.role, active:u.active
+      })));
+
+      if (signature === lastUsersSignature) return;
+      lastUsersSignature = signature;
+      d.users = normalizedUsers;
       refresh();
     } catch (e) {
       console.error('VENTARA usuarios: sincronización no disponible', e);
@@ -134,8 +146,18 @@
   }
 
 
-  async function createUserWithoutGenericSave() {
+  async function createUserWithoutGenericSave(event) {
+    if (event?.preventDefault) event.preventDefault();
+    if (isSubmittingUser) return;
     if (!admin()) return toast('Solo un Administrador puede crear usuarios');
+
+    const submitButton = document.querySelector('#users .modalbox button.btn.primary, #users button.btn.primary');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.setAttribute('aria-disabled', 'true');
+    }
+    isSubmittingUser = true;
+
     const role = String(document.getElementById('u_role')?.value || 'Cajero');
     const name = String(document.getElementById('u_name')?.value || '').trim();
     const username = String(document.getElementById('u_username')?.value || '').trim().toLowerCase();
@@ -155,12 +177,18 @@
         try { localSave(); } catch (_) {}
       }
       closeModal();
-      refresh();
+      lastUsersSignature = '';
       toast('Usuario creado correctamente en la nube');
-      setTimeout(syncUsersFromCloud, 100);
+      setTimeout(syncUsersFromCloud, 150);
     } catch (e) {
       console.error('VENTARA usuarios: creación', e);
       toast(e.message || 'No se pudo crear el usuario');
+    } finally {
+      isSubmittingUser = false;
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.removeAttribute('aria-disabled');
+      }
     }
   }
 
