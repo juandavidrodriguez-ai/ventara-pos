@@ -1,50 +1,66 @@
-/* VENTARA POS - Selección nativa de texto con mouse en campos editables.
-   Parche aislado: protege INPUT/TEXTAREA frente a handlers globales de mouse/pointer
-   que puedan cerrar/cambiar la ventana durante una selección por arrastre. */
+/* VENTARA POS - Protección quirúrgica de selección de texto en modales.
+   El modal cierra cuando su backdrop recibe un click. Al arrastrar texto,
+   el mouseup puede terminar fuera del INPUT/TEXTAREA y generar ese click.
+   Este parche conserva los clicks normales y bloquea solo ese click posterior
+   a una selección iniciada dentro de un campo editable. */
 (() => {
   'use strict';
 
-  let selectingText = false;
+  let selectionStartedInField = false;
 
   const isEditableField = (target) => {
     const el = target && target.nodeType === 1 ? target : target?.parentElement;
     return !!el?.closest?.('input, textarea');
   };
 
-  const beginSelection = (event) => {
-    if (isEditableField(event.target)) selectingText = true;
+  const isModalBackdrop = (target) => {
+    const el = target && target.nodeType === 1 ? target : target?.parentElement;
+    return !!el?.closest?.('#modal') && el?.closest?.('#modal') === el;
   };
 
-  const protectSelection = (event) => {
-    if (!isEditableField(event.target)) return;
-    event.stopPropagation();
-    if (event.type === 'click' && !selectingText) return;
-  };
+  window.addEventListener('mousedown', (event) => {
+    selectionStartedInField = isEditableField(event.target);
+  }, true);
 
-  const endSelection = (event) => {
-    if (isEditableField(event.target)) {
-      event.stopPropagation();
-      if (event.type === 'mouseup' || event.type === 'pointerup') {
-        setTimeout(() => { selectingText = false; }, 0);
-      }
-    }
-  };
+  window.addEventListener('pointerdown', (event) => {
+    selectionStartedInField = isEditableField(event.target);
+  }, true);
 
-  // No bloqueamos mousedown/pointerdown: así se conserva el foco y la selección nativa.
-  window.addEventListener('mousedown', beginSelection, true);
-  window.addEventListener('pointerdown', beginSelection, true);
+  // No bloquear movimientos: solo impedir que handlers globales reciban el evento
+  // mientras el puntero permanece dentro del campo.
+  window.addEventListener('mousemove', (event) => {
+    if (isEditableField(event.target)) event.stopPropagation();
+  }, true);
 
-  // Aislar el movimiento/arrastre dentro de campos editables.
-  window.addEventListener('mousemove', protectSelection, true);
-  window.addEventListener('pointermove', protectSelection, true);
-  window.addEventListener('dragstart', protectSelection, true);
+  window.addEventListener('pointermove', (event) => {
+    if (isEditableField(event.target)) event.stopPropagation();
+  }, true);
 
-  // Evitar que el cierre/navegación global interprete el final de una selección como una acción.
-  window.addEventListener('mouseup', endSelection, true);
-  window.addEventListener('pointerup', endSelection, true);
+  window.addEventListener('dragstart', (event) => {
+    if (isEditableField(event.target)) event.stopPropagation();
+  }, true);
 
-  // Si el navegador genera click tras el arrastre, aislarlo únicamente cuando proviene del campo.
+  // Esta es la protección clave: index.html cierra #modal cuando el click
+  // termina directamente sobre el backdrop. No debe hacerlo tras seleccionar texto.
   window.addEventListener('click', (event) => {
-    if (selectingText && isEditableField(event.target)) event.stopPropagation();
+    if (selectionStartedInField && isModalBackdrop(event.target)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      selectionStartedInField = false;
+    }
+  }, true);
+
+  window.addEventListener('mouseup', (event) => {
+    if (selectionStartedInField && isModalBackdrop(event.target)) {
+      event.stopPropagation();
+    }
+    setTimeout(() => { selectionStartedInField = false; }, 0);
+  }, true);
+
+  window.addEventListener('pointerup', (event) => {
+    if (selectionStartedInField && isModalBackdrop(event.target)) {
+      event.stopPropagation();
+    }
+    setTimeout(() => { selectionStartedInField = false; }, 0);
   }, true);
 })();
