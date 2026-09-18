@@ -133,6 +133,39 @@
     }
   }
 
+
+  async function createUserWithoutGenericSave() {
+    if (!admin()) return toast('Solo un Administrador puede crear usuarios');
+    const role = String(document.getElementById('u_role')?.value || 'Cajero');
+    const name = String(document.getElementById('u_name')?.value || '').trim();
+    const username = String(document.getElementById('u_username')?.value || '').trim().toLowerCase();
+    const password = String(document.getElementById('u_password')?.value || '');
+    const password2 = String(document.getElementById('u_password2')?.value || '');
+    const active = document.getElementById('u_active')?.value === '1';
+    if (!name) return toast('Escribe el nombre');
+    if (!/^[a-z0-9._-]{3,30}$/.test(username)) return toast('Usuario inválido');
+    if (password.length < 6) return toast('La contraseña debe tener mínimo 6 caracteres');
+    if (password !== password2) return toast('Las contraseñas no coinciden');
+    try {
+      const data = await invoke({ username, fullName:name, password, role, active });
+      const d = appDb();
+      if (d) {
+        d.users = (d.users || []).filter(u => u.id !== data.userId);
+        d.users.push({ id:data.userId, name, username, role, active, permissions:ROLE_PERMISSIONS_VIEW[role] || [] });
+        try { localSave(); } catch (_) {}
+      }
+      closeModal();
+      refresh();
+      toast('Usuario creado correctamente en la nube');
+      setTimeout(syncUsersFromCloud, 100);
+    } catch (e) {
+      console.error('VENTARA usuarios: creación', e);
+      toast(e.message || 'No se pudo crear el usuario');
+    }
+  }
+
+  window.saveUser = createUserWithoutGenericSave;
+
   window.editVentaraUser = editUser;
   window.saveEditedUser = saveEditedUser;
   window.deleteVentaraUser = deleteUser;
@@ -184,6 +217,12 @@
   function boot() {
     installRenderHook();
     setTimeout(() => { syncUsersFromCloud(); decorateUsersTable(); }, 0);
+    setInterval(() => {
+      if (document.getElementById('users')?.classList.contains('active')) {
+        syncUsersFromCloud();
+        decorateUsersTable();
+      }
+    }, 800);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once:true });
