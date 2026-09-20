@@ -9,7 +9,7 @@
     return price && name ? price.closest('.modal, .modal-content, [role="dialog"]') || document.querySelector('.modal, .modal-content, [role="dialog"]') : null;
   };
 
-  const moneyNumber = (v) => {
+  const parseMoney = (v) => { const fn = window.ventaraParseLocalizedNumber; if (typeof fn === 'function') { const n = fn(v); if (Number.isFinite(n)) return n; } const raw = String(v ?? '').trim().replace(/\s/g,''); if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(raw)) return Number(raw.replace(/\./g,'').replace(',','.')); if (/^-?\d+(,\d+)?$/.test(raw)) return Number(raw.replace(',','.')); return Number(raw); };\n\n  const moneyNumber = (v) => {
     const n = Number(v);
     return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
   };
@@ -21,10 +21,10 @@
     if (!base || !total || !iva) return;
     const rate = iva.value === 'custom' ? Number(document.getElementById('ventaraCustomIva')?.value || 0) : Number(iva.value || 0);
     if (source === 'base') {
-      const b = Number(base.value || 0);
+      const b = parseMoney(base.value || 0);
       total.value = b ? String(moneyNumber(b * (1 + rate / 100))) : '';
     } else {
-      const t = Number(total.value || 0);
+      const t = parseMoney(total.value || 0);
       base.value = t ? String(moneyNumber(t / (1 + rate / 100))) : '';
     }
   };
@@ -114,7 +114,7 @@
       if (custom) custom.value = String(rate);
     }
 
-    const totalValue = Number(price.value || 0);
+    const totalValue = parseMoney(price.value || 0);
     base.value = totalValue ? String(moneyNumber(totalValue / (1 + rate / 100))) : '';
 
     base.addEventListener('input', () => { lastEdited = 'base'; syncValues('base'); });
