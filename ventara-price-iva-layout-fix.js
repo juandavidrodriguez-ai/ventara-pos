@@ -54,8 +54,14 @@
     priceField.dataset.ventaraPriceRow = '1';
     ivaField.dataset.ventaraPriceIva = '1';
 
-    const p = (() => {
-      try { return db.products.find(x => x.id === priceField.dataset.ventaraProductId) || null; } catch (_) { return null; }
+    const existingProduct = (() => {
+      try {
+        const raw = localStorage.getItem('ventara_pos_v1');
+        const state = raw ? JSON.parse(raw) : null;
+        const name = document.getElementById('f_name')?.value || '';
+        const code = document.getElementById('f_code')?.value || '';
+        return state?.products?.find(x => (code && x.code === code) || (name && x.name === name)) || null;
+      } catch (_) { return null; }
     })();
 
     const baseField = document.createElement('div');
@@ -90,14 +96,6 @@
     const parent = priceField.parentElement;
     parent.insertBefore(row, priceField);
     row.append(baseField, plus, ivaField, equals, priceField);
-
-    const existingProduct = (() => {
-      try {
-        const name = document.getElementById('f_name')?.value || '';
-        const code = document.getElementById('f_code')?.value || '';
-        return db.products.find(x => (code && x.code === code) || (name && x.name === name)) || null;
-      } catch (_) { return null; }
-    })();
 
     const rate = Number(existingProduct?.iva ?? 0);
     const option = [...ivaSelect.options].find(o => Number(o.value) === rate);
@@ -134,34 +132,7 @@
     customObserver.observe(ivaField, {childList:true, subtree:true});
   }
 
-  let originalSaveProduct = null;
-  let wrapping = false;
-
-  function installSaveHook() {
-    if (wrapping || typeof window.saveProduct !== 'function') return;
-    originalSaveProduct = window.saveProduct;
-    window.saveProduct = async function(id) {
-      const iva = readRate();
-      const name = String(document.getElementById('f_name')?.value || '').trim();
-      const code = String(document.getElementById('f_code')?.value || '').trim();
-      const result = await originalSaveProduct.apply(this, arguments);
-      try {
-        const products = db?.products || [];
-        let p = id ? products.find(x => x.id === id) : null;
-        if (!p && code) p = products.find(x => x.code === code);
-        if (!p && name) p = products.find(x => x.name === name);
-        if (p) {
-          p.iva = moneyNumber(iva);
-          if (typeof save === 'function') save();
-          if (typeof cloudSave === 'function') await cloudSave();
-        }
-      } catch (e) {
-        console.error('VENTARA Precio/IVA: no se pudo guardar el IVA', e);
-      }
-      return result;
-    };
-    wrapping = true;
-  }
+  window.__ventaraCurrentIva = readRate;
 
   function boot() {
     installSaveHook();
