@@ -135,7 +135,6 @@
   window.__ventaraCurrentIva = readRate;
 
   function boot() {
-    installSaveHook();
     buildPriceRow();
   }
 
