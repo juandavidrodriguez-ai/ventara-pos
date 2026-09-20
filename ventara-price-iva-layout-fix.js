@@ -9,17 +9,36 @@
     return price && name ? price.closest('.modal, .modal-content, [role="dialog"]') || document.querySelector('.modal, .modal-content, [role="dialog"]') : null;
   };
 
-  const parseMoney = (v) => { const fn = window.ventaraParseLocalizedNumber; if (typeof fn === 'function') { const n = fn(v); if (Number.isFinite(n)) return n; } const raw = String(v ?? '').trim().replace(/\s/g,''); if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(raw)) return Number(raw.replace(/\./g,'').replace(',','.')); if (/^-?\d+(,\d+)?$/.test(raw)) return Number(raw.replace(',','.')); return Number(raw); };\n\n  const moneyNumber = (v) => {
+  const parseMoney = (v) => {
+    const fn = window.ventaraParseLocalizedNumber;
+    if (typeof fn === 'function') {
+      const n = fn(v);
+      if (Number.isFinite(n)) return n;
+    }
+    const raw = String(v ?? '').trim().replace(/\s/g,'');
+    if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(raw)) return Number(raw.replace(/\./g,'').replace(',','.'));
+    if (/^-?\d+(,\d+)?$/.test(raw)) return Number(raw.replace(',','.'));
+    return Number(raw);
+  };
+
+  const moneyNumber = (v) => {
     const n = Number(v);
     return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+  };
+
+  const getRate = () => {
+    const sel = document.getElementById('ventaraProductIva');
+    if (!sel) return 0;
+    return sel.value === 'custom'
+      ? parseMoney(document.getElementById('ventaraCustomIva')?.value || 0)
+      : Number(sel.value || 0);
   };
 
   const syncValues = (source) => {
     const base = document.getElementById('ventaraPriceBase');
     const total = document.getElementById('f_price');
-    const iva = document.getElementById('ventaraProductIva');
-    if (!base || !total || !iva) return;
-    const rate = iva.value === 'custom' ? Number(document.getElementById('ventaraCustomIva')?.value || 0) : Number(iva.value || 0);
+    if (!base || !total) return;
+    const rate = getRate();
     if (source === 'base') {
       const b = parseMoney(base.value || 0);
       total.value = b ? String(moneyNumber(b * (1 + rate / 100))) : '';
@@ -29,14 +48,54 @@
     }
   };
 
-  const readRate = () => {
-    const sel = document.getElementById('ventaraProductIva');
-    if (!sel) return 0;
-    if (sel.value === 'custom') return Number(document.getElementById('ventaraCustomIva')?.value || 0);
-    return Number(sel.value || 0);
-  };
+  const readRate = () => getRate();
 
   let lastEdited = 'total';
+
+  function ensureIvaField(modal) {
+    let field = document.getElementById('ventaraProductIva')?.closest('.field');
+    if (field) return field;
+
+    const price = document.getElementById('f_price');
+    if (!price) return null;
+
+    field = document.createElement('div');
+    field.className = 'field';
+    field.style.cssText = 'margin-top:0';
+    field.innerHTML = '<label>IVA (%)</label><select id="ventaraProductIva">' +
+      rates.map(r => '<option value="' + r + '">' + r + '%</option>').join('') +
+      '<option value="custom">Personalizado</option>' +
+      '</select><div id="ventaraCustomIvaWrap" style="display:none;margin-top:6px"><input id="ventaraCustomIva" type="text" inputmode="decimal" placeholder="% IVA personalizado"></div>';
+
+    const host = price.closest('.field')?.parentElement || modal.querySelector('.form') || modal;
+    host.appendChild(field);
+
+    const sel = field.querySelector('#ventaraProductIva');
+    const custom = field.querySelector('#ventaraCustomIva');
+    const customWrap = field.querySelector('#ventaraCustomIvaWrap');
+
+    const refresh = () => {
+      customWrap.style.display = sel.value === 'custom' ? 'block' : 'none';
+      syncValues(lastEdited);
+    };
+    sel.addEventListener('change', refresh);
+    custom.addEventListener('input', () => syncValues(lastEdited));
+
+    refresh();
+    return field;
+  }
+
+  function existingProduct() {
+    try {
+      const raw = localStorage.getItem('ventara_pos_v1');
+      const state = raw ? JSON.parse(raw) : null;
+      const name = document.getElementById('f_name')?.value || '';
+      const code = document.getElementById('f_code')?.value || '';
+      return state?.products?.find(x => (code && x.code === code) || (name && x.name === name)) || null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   function buildPriceRow() {
     const price = document.getElementById('f_price');
@@ -45,41 +104,21 @@
     const priceField = price.closest('.field');
     if (!priceField || priceField.dataset.ventaraPriceRow === '1') return;
 
-    let ivaSelect = document.getElementById('ventaraProductIva');
-    if (!ivaSelect) return;
-
-    const ivaField = ivaSelect.closest('.field');
+    const ivaField = ensureIvaField(modal);
     if (!ivaField) return;
 
     priceField.dataset.ventaraPriceRow = '1';
     ivaField.dataset.ventaraPriceIva = '1';
 
-    const existingProduct = (() => {
-      try {
-        const raw = localStorage.getItem('ventara_pos_v1');
-        const state = raw ? JSON.parse(raw) : null;
-        const name = document.getElementById('f_name')?.value || '';
-        const code = document.getElementById('f_code')?.value || '';
-        return state?.products?.find(x => (code && x.code === code) || (name && x.name === name)) || null;
-      } catch (_) { return null; }
-    })();
-
     const baseField = document.createElement('div');
     baseField.className = 'field';
-    baseField.innerHTML = '<label>Precio</label><input id="ventaraPriceBase" type="number" step="0.01" placeholder="Precio">';
+    baseField.innerHTML = '<label>Precio</label><input id="ventaraPriceBase" type="text" inputmode="decimal" placeholder="Precio">';
 
     const base = baseField.querySelector('#ventaraPriceBase');
     const label = priceField.querySelector('label');
     if (label) label.textContent = 'Total';
     price.placeholder = 'Total';
-    price.removeAttribute('data-ventara-price-row');
     price.style.width = '100%';
-
-    const preview = ivaField.querySelector('#ventaraIvaPreview');
-    if (preview) preview.style.display = 'none';
-    const small = ivaField.querySelector('small');
-    if (small) small.style.display = 'none';
-    ivaField.style.marginTop = '0';
 
     const row = document.createElement('div');
     row.className = 'ventara-price-iva-row';
@@ -97,41 +136,40 @@
     parent.insertBefore(row, priceField);
     row.append(baseField, plus, ivaField, equals, priceField);
 
-    const rate = Number(existingProduct?.iva ?? 0);
-    const option = [...ivaSelect.options].find(o => Number(o.value) === rate);
-    if (option) ivaSelect.value = String(rate);
-    else if (rate) {
-      ivaSelect.value = 'custom';
-      let custom = document.getElementById('ventaraCustomIva');
-      if (!custom) {
-        const wrap = document.createElement('div');
-        wrap.id = 'ventaraCustomIvaWrap';
-        wrap.style.cssText = 'margin-top:6px';
-        wrap.innerHTML = '<input id="ventaraCustomIva" type="number" min="0" max="100" step="0.01" placeholder="% IVA">';
-        preview?.appendChild(wrap);
-        custom = wrap.querySelector('#ventaraCustomIva');
+    const product = existingProduct();
+    const rate = Number(product?.iva ?? 0);
+    const sel = document.getElementById('ventaraProductIva');
+    const custom = document.getElementById('ventaraCustomIva');
+    const customWrap = document.getElementById('ventaraCustomIvaWrap');
+
+    if (sel) {
+      const option = [...sel.options].find(o => Number(o.value) === rate);
+      if (option) {
+        sel.value = String(rate);
+        customWrap.style.display = 'none';
+      } else if (rate) {
+        sel.value = 'custom';
+        custom.value = String(rate);
+        customWrap.style.display = 'block';
       }
-      if (custom) custom.value = String(rate);
     }
 
     const totalValue = parseMoney(price.value || 0);
     base.value = totalValue ? String(moneyNumber(totalValue / (1 + rate / 100))) : '';
 
-    base.addEventListener('input', () => { lastEdited = 'base'; syncValues('base'); });
-    price.addEventListener('input', () => { lastEdited = 'total'; syncValues('total'); });
-    ivaSelect.addEventListener('change', () => syncValues(lastEdited));
-
-    const customHandler = () => syncValues(lastEdited);
-    const customObserver = new MutationObserver(() => {
-      const c = document.getElementById('ventaraCustomIva');
-      if (c && !c.dataset.ventaraBound) {
-        c.dataset.ventaraBound = '1';
-        c.addEventListener('input', customHandler);
-      }
+    base.addEventListener('input', () => {
+      lastEdited = 'base';
+      syncValues('base');
     });
-    customObserver.observe(ivaField, {childList:true, subtree:true});
+    price.addEventListener('input', () => {
+      lastEdited = 'total';
+      syncValues('total');
+    });
   }
 
+  window.ventaraIvaRates = rates;
+  window.ventaraPriceWithIva = (price, iva) => moneyNumber(parseMoney(price) * (1 + Number(iva || 0) / 100));
+  window.ventaraIvaAmount = (price, iva) => moneyNumber(parseMoney(price) * Number(iva || 0) / 100);
   window.__ventaraCurrentIva = readRate;
 
   function boot() {
@@ -141,7 +179,6 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true});
   else boot();
 
-  new MutationObserver(() => { buildPriceRow(); }).observe(document.documentElement, {subtree:true, childList:true});
-
-  setInterval(() => { buildPriceRow(); }, 700);
+  new MutationObserver(buildPriceRow).observe(document.documentElement, {subtree:true, childList:true});
+  setInterval(buildPriceRow, 700);
 })();
