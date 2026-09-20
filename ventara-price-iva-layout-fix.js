@@ -87,10 +87,9 @@
     equals.textContent = '=';
     equals.style.cssText = 'font-weight:900;font-size:18px;padding-bottom:9px;text-align:center';
 
-    row.append(baseField, plus, ivaField, equals, priceField);
-
     const parent = priceField.parentElement;
     parent.insertBefore(row, priceField);
+    row.append(baseField, plus, ivaField, equals, priceField);
 
     const existingProduct = (() => {
       try {
