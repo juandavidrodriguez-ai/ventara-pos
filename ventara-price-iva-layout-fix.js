@@ -141,13 +141,7 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true});
   else boot();
 
-  new MutationObserver(() => {
-    installSaveHook();
-    buildPriceRow();
-  }).observe(document.documentElement, {subtree:true, childList:true});
+  new MutationObserver(() => { buildPriceRow(); }).observe(document.documentElement, {subtree:true, childList:true});
 
-  setInterval(() => {
-    installSaveHook();
-    buildPriceRow();
-  }, 700);
+  setInterval(() => { buildPriceRow(); }, 700);
 })();
