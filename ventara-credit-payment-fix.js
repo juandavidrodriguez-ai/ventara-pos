@@ -111,47 +111,68 @@ const patchModal=()=>{
 
       try{
         const clientSelect=document.getElementById('creditClientSelect');
-        const option=clientSelect?.options?.[clientSelect.selectedIndex];
-        const selectedVal=String(clientSelect?.value||'').trim();
-        const selectedName=String(option?.textContent||'').trim();
-        if(!selectedVal||selectedVal==='0'||selectedVal==='undefined'){
-          throw new Error('Debe seleccionar un cliente para vender a crédito');
+        const selectedOption=clientSelect?.options?.[clientSelect.selectedIndex];
+        const selectedClientId=String(clientSelect?.value||selectedOption?.getAttribute('data-id')||'').trim();
+        const selectedClientName=String(selectedOption?.text||selectedOption?.innerText||'').trim();
+
+        if(!selectedClientId&&!selectedClientName){
+          throw new Error('Por favor selecciona un cliente válido.');
         }
 
         const clients=getClients();
-        /* Mapeo flexible: acepta id, client_id, cedula o id_cliente y normaliza el tipo. */
-        let clienteEncontrado=clients.find(c=>{
+
+        /* Primero intenta mapear contra la lista local, tolerando tipos y nombres de campo distintos. */
+        let clienteFinal=clients.find(c=>{
           const idCliente=String(c?.id??c?.client_id??c?.cedula??c?.id_cliente??'').trim();
-          return idCliente===selectedVal&&idCliente!=='';
+          return idCliente!==''&&idCliente===selectedClientId;
         });
 
-        /* Respaldo de emergencia: si el select recibió el nombre como value, resolver por nombre. */
-        if(!clienteEncontrado){
-          const nombreSeleccionado=selectedName.trim().toLowerCase();
-          clienteEncontrado=clients.find(c=>
-            String(c?.nombre??c?.name??c?.razon_social??'').trim().toLowerCase()===selectedVal.toLowerCase()
-          )||clients.find(c=>
-            String(c?.nombre??c?.name??c?.razon_social??'').trim().toLowerCase()===nombreSeleccionado
-          );
-        }
-        if(!clienteEncontrado){
-          throw new Error('No se pudo mapear el cliente de la lista desplegable.');
+        /* Respaldo por nombre: útil cuando el selector conserva el nombre como value. */
+        if(!clienteFinal){
+          const nombreBuscado=(selectedClientId||selectedClientName).trim().toLowerCase();
+          clienteFinal=clients.find(c=>{
+            const nombre=String(c?.nombre??c?.name??c?.razon_social??'').trim().toLowerCase();
+            return nombre!==''&&nombre===nombreBuscado;
+          });
         }
 
-        const clienteId=clienteEncontrado?.id??clienteEncontrado?.client_id??clienteEncontrado?.cedula??clienteEncontrado?.id_cliente;
-        if(clienteId===undefined||clienteId===null||String(clienteId).trim()===''){
+        /* Último respaldo: el DOM ya contiene la selección válida; se construye el objeto solicitado. */
+        if(!clienteFinal){
+          const idDesdeDom=selectedClientId||selectedOption?.getAttribute('data-id')||selectedClientName;
+          clienteFinal={
+            id:String(idDesdeDom||'').trim(),
+            nombre:selectedClientName,
+            name:selectedClientName
+          };
+        }
+
+        if(!clienteFinal.id){
           throw new Error('El cliente seleccionado no tiene un ID válido.');
         }
 
-        /* Normaliza el selector y el objeto antes de entrar al flujo nativo de venta. */
-        if(clienteEncontrado.id===undefined||clienteEncontrado.id===null){
-          clienteEncontrado.id=clienteId;
+        /* Si el objeto proviene de un campo alternativo, normaliza su id para el flujo nativo. */
+        if(clienteFinal.id===undefined||clienteFinal.id===null){
+          clienteFinal.id=clienteFinal.client_id??clienteFinal.cedula??clienteFinal.id_cliente;
         }
-        if(option)option.value=String(clienteId);
-        if(clientSelect)clientSelect.value=String(clienteId);
-        window.posClient=clienteEncontrado.id;
-        hideWarning();
 
+        if(selectedOption)selectedOption.value=String(clienteFinal.id);
+        if(clientSelect)clientSelect.value=String(clienteFinal.id);
+
+        /*
+         * finishSale trabaja sobre window.db.clients. Si el cliente ya existe, usa el
+         * objeto original; si el selector fue la única fuente disponible, incorpora
+         * únicamente el respaldo mínimo al arreglo en memoria para que el flujo nativo
+         * pueda localizarlo. No toca pagos no-crédito.
+         */
+        let clienteEnDb=clients.find(c=>String(c?.id??'').trim()===String(clienteFinal.id).trim());
+        if(!clienteEnDb){
+          clienteEnDb=clienteFinal;
+          if(!Array.isArray(window.db?.clients))window.db.clients=[];
+          window.db.clients.push(clienteEnDb);
+        }
+
+        window.posClient=clienteEnDb.id;
+        hideWarning();
         if(typeof window.finishSale!=='function'){
           throw new Error('No está disponible la función de registro de ventas.');
         }
