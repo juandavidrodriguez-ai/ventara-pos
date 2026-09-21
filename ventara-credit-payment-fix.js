@@ -25,40 +25,54 @@ const getClients=()=>{
 const rebuildClientSelect=()=>{
   const s=document.getElementById('creditClientSelect');
   if(!s)return false;
-  const current=String(s.value||'');
   const clients=getClients().filter(c=>{
-    const id=c?.id??c?.client_id;
-    const name=c?.nombre??c?.name;
+    const id=c?.id??c?.client_id??c?.cedula;
+    const name=c?.nombre??c?.name??c?.razon_social;
     return id!==undefined&&id!==null&&String(id)!=='0'&&String(name??'').trim()!=='';
   });
-  const signature=clients.map(c=>String(c?.id??c?.client_id)+'|'+String(c?.nombre??c?.name??'')).join('||');
-  if(s.dataset.ventaraClientSignature===signature)return true;
-  s.innerHTML='<option value="">-- Selecciona un cliente --</option>'+clients.map(c=>{
-    const id=c?.id??c?.client_id;
-    const name=c?.nombre??c?.name;
-    return '<option value="'+escapeHtml(id)+'">'+escapeHtml(name)+'</option>';
-  }).join('');
-  if(current&&Array.from(s.options).some(o=>String(o.value)===current))s.value=current;
-  s.addEventListener('change',()=>{
-    const id=String(s.value||'').trim();
-    if(id&&id!=='0'&&id!=='undefined'){
-      const client=getClients().find(c=>String(c?.id??c?.client_id)===id);
-      if(client){
-        if(client.id===undefined||client.id===null)client.id=client.client_id;
-        window.posClient=client.id;
-        hideWarning();
-      }
+  const signature=clients.map(c=>String(c?.id??c?.client_id??c?.cedula)+'|'+String(c?.nombre??c?.name??c?.razon_social??'')).join('||');
+  if(s.dataset.ventaraClientSignature!==signature){
+    s.innerHTML='<option value="">-- Selecciona un cliente --</option>'+clients.map(c=>{
+      const id=c?.id??c?.client_id??c?.cedula;
+      const name=c?.nombre??c?.name??c?.razon_social;
+      return '<option value="'+escapeHtml(id)+'">'+escapeHtml(name)+'</option>';
+    }).join('');
+    s.dataset.ventaraClientSignature=signature;
+  }
+
+  /* Corrige también selectores que hayan sido llenados por otro código con el nombre como value. */
+  Array.from(s.options).forEach(o=>{
+    if(!o.value||o.value==='0'||o.value==='undefined')return;
+    const byId=clients.find(c=>String(c?.id??c?.client_id??c?.cedula)===String(o.value));
+    if(byId){
+      const id=byId?.id??byId?.client_id??byId?.cedula;
+      o.value=String(id);
+      return;
     }
-  },{once:false});
-  s.dataset.ventaraClientSignature=signature;
-  if(s.value&&s.value!=='0'&&s.value!=='undefined'){
-    const client=getClients().find(c=>String(c?.id??c?.client_id)===String(s.value));
+    const label=String(o.textContent||'').trim().toLowerCase();
+    const byName=clients.find(c=>String(c?.nombre??c?.name??c?.razon_social??'').trim().toLowerCase()===label);
+    if(byName){
+      const id=byName?.id??byName?.client_id??byName?.cedula;
+      o.value=String(id);
+    }
+  });
+
+  s.addEventListener('change',()=>{
+    const option=s.options[s.selectedIndex];
+    const rawId=String(s.value||'').trim();
+    const label=String(option?.textContent||'').trim().toLowerCase();
+    const client=clients.find(c=>String(c?.id??c?.client_id??c?.cedula)===rawId)||
+      clients.find(c=>String(c?.nombre??c?.name??c?.razon_social??'').trim().toLowerCase()===label);
     if(client){
-      if(client.id===undefined||client.id===null)client.id=client.client_id;
+      const id=client?.id??client?.client_id??client?.cedula;
+      if(client.id===undefined||client.id===null)client.id=id;
+      if(option)option.value=String(id);
+      s.value=String(id);
       window.posClient=client.id;
       hideWarning();
     }
-  }
+  },{once:false});
+
   return true;
 };
 
@@ -97,19 +111,28 @@ const patchModal=()=>{
 
       try{
         const clientSelect=document.getElementById('creditClientSelect');
+        const option=clientSelect?.options?.[clientSelect.selectedIndex];
         const selectedId=String(clientSelect?.value||'').trim();
+        const selectedName=String(option?.textContent||'').trim().toLowerCase();
         if(!selectedId||selectedId==='0'||selectedId==='undefined'){
           throw new Error('Debe seleccionar un cliente para vender a crédito');
         }
 
         const clients=getClients();
-        const clienteEncontrado=clients.find(c=>String(c?.id??c?.client_id)===selectedId);
+        const clienteEncontrado=clients.find(c=>String(c?.id??c?.client_id??c?.cedula)===selectedId)||
+          clients.find(c=>String(c?.nombre??c?.name??c?.razon_social??'').trim().toLowerCase()===selectedName);
         if(!clienteEncontrado){
-          throw new Error('No se encontró el cliente seleccionado en la memoria local.');
+          throw new Error('ID de cliente inválido en la lista.');
         }
 
+        const clienteId=clienteEncontrado?.id??clienteEncontrado?.client_id??clienteEncontrado?.cedula;
+        if(clienteId===undefined||clienteId===null||String(clienteId)===''){
+          throw new Error('El cliente seleccionado no tiene un ID válido.');
+        }
+        if(option)option.value=String(clienteId);
+        if(clientSelect)clientSelect.value=String(clienteId);
         if(clienteEncontrado.id===undefined||clienteEncontrado.id===null){
-          clienteEncontrado.id=clienteEncontrado.client_id;
+          clienteEncontrado.id=clienteId;
         }
         window.posClient=clienteEncontrado.id;
         hideWarning();
