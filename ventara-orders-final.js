@@ -22,7 +22,16 @@ div:has(> input[placeholder*="NIT o cliente"]) {
   margin: 0 !important;
   padding: 0 !important;
   overflow: hidden !important;
-}`;
+}/* Ocultar únicamente la segunda barra de búsqueda duplicada en Pedidos */
+div:has(> input[placeholder*="NIT o cliente"]) {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+`;
     document.head.appendChild(style);
   }
 }
