@@ -1,4 +1,4 @@
-/* VENTARA POS — Corrección quirúrgica del pago a crédito v9. */
+/* VENTARA POS — Corrección quirúrgica del pago a crédito v10. */
 (()=>{'use strict';
 if(window.__ventaraCreditPaymentFix)return;
 window.__ventaraCreditPaymentFix=true;
@@ -24,6 +24,57 @@ const normalizeClientSelect=()=>{
   return true;
 };
 
+/*
+ * Flujo seguro de crédito:
+ * - crea SIEMPRE el payload antes de asignar propiedades;
+ * - no escribe .clients sobre objetos externos/indefinidos;
+ * - conserva la persistencia nativa de Ventara (confirmPayment -> finishSale -> save);
+ * - no crea una tabla/flujo paralelo de ventas.
+ */
+async function procesarVentaCreditoSegura(totalVenta,e){
+  let ventaCredito={};
+  try{
+    const selectCliente=document.getElementById('creditClientSelect') ||
+      document.querySelector('#creditFields select');
+    const clienteId=selectCliente ? selectCliente.value : null;
+    const clienteNombre=selectCliente && selectCliente.selectedIndex>=0
+      ? selectCliente.options[selectCliente.selectedIndex].text
+      : '';
+
+    if(!clienteId && !clienteNombre){
+      alert('Selecciona un cliente válido.');
+      return null;
+    }
+
+    ventaCredito={
+      total:typeof totalVenta!=='undefined' ? (parseFloat(totalVenta)||0) : 0,
+      metodo_pago:'credito',
+      client_id:clienteId||null,
+      cliente:clienteNombre||'',
+      fecha:new Date().toISOString()
+    };
+
+    hideWarning();
+
+    /*
+     * IMPORTANTE: el proyecto actual no tiene public.ventas.
+     * La persistencia real está en public.ventara_state mediante save().
+     * Delegamos al confirmPayment nativo para no duplicar ni romper ventas.
+     */
+    const originalConfirm=window.__ventaraOriginalConfirmPayment;
+    if(typeof originalConfirm==='function'){
+      return originalConfirm.call(this,totalVenta,e);
+    }
+
+    throw new Error('No se encontró el flujo nativo de confirmación de venta.');
+  }catch(err){
+    console.error('Error capturado:',err,ventaCredito);
+    alert('No se pudo registrar la venta a crédito: '+(err?.message||String(err)));
+    return null;
+  }
+}
+window.procesarVentaCreditoSegura=procesarVentaCreditoSegura;
+
 const patchModal=()=>{
   if(typeof window.openPaymentModalPOS==='function'&&!window.__ventaraCreditOpenPatched){
     const originalOpen=window.openPaymentModalPOS;
@@ -37,57 +88,10 @@ const patchModal=()=>{
 
   if(typeof window.confirmPayment==='function'&&!window.__ventaraCreditConfirmPatched){
     const originalConfirm=window.confirmPayment;
+    window.__ventaraOriginalConfirmPayment=originalConfirm;
     window.confirmPayment=function(total,e){
       if(!isCreditPayment())return originalConfirm.apply(this,arguments);
-
-      let salePayload={};
-      try{
-        const creditSelect=document.getElementById('creditClientSelect');
-        const selectedOption=creditSelect?.options?.[creditSelect.selectedIndex];
-
-        const selectedClientId=String(
-          creditSelect?.value ||
-          selectedOption?.getAttribute('data-id') ||
-          ''
-        ).trim();
-
-        const selectedClientName=String(
-          selectedOption?.text ||
-          selectedOption?.innerText ||
-          ''
-        ).trim();
-
-        if(!selectedClientId&&!selectedClientName){
-          alert('Selecciona un cliente válido.');
-          return null;
-        }
-
-        /*
-         * Payload local seguro. No se escribe ninguna propiedad .clients sobre
-         * un objeto indefinido y no se crea una estructura paralela de ventas.
-         */
-        salePayload={
-          total:parseFloat(total)||0,
-          payment_method:'credito',
-          fecha:new Date().toISOString(),
-          client_id:selectedClientId||null,
-          client_name:selectedClientName
-        };
-
-        if(creditSelect&&selectedClientId)creditSelect.value=selectedClientId;
-        hideWarning();
-
-        /*
-         * La persistencia real de Ventara está encapsulada en el flujo nativo
-         * confirmPayment -> finishSale -> save(). Se conserva ese flujo para
-         * mantener la estructura actual de Supabase/ventara_state.
-         */
-        return originalConfirm.call(this,total,e);
-      }catch(error){
-        console.error('[VENTARA] Error al procesar crédito:',error,salePayload);
-        alert('No se pudo registrar la venta a crédito: '+(error?.message||String(error)));
-        return null;
-      }
+      return procesarVentaCreditoSegura.call(this,total,e);
     };
     window.__ventaraCreditConfirmPatched=true;
   }
