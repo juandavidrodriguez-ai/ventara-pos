@@ -2,8 +2,11 @@
 (()=>{'use strict';
 console.log("PARCHE PEDIDOS APLICADO CORRECTAMENTE");
 const S=['Pendiente','Entregado','Cancelado'],q=s=>document.querySelector(s),root=()=>q('#orders');
+const appActive=()=>{const login=document.getElementById('loginScreen'),main=document.getElementById('mainApp');return !!main&&main.style.display!=='none'&&(!login||login.style.display==='none')};
 function applyImmediateOrdersPatch(){
-  const scope=document.querySelector('#orders')||document;
+  if(!appActive())return;
+  const scope=document.querySelector('#orders');
+  if(!scope)return;
   const buscadorDuplicado=scope.querySelectorAll('.orders-search-filter, .filter-bar-container, div[class*="search"]');
   if(buscadorDuplicado.length>1)buscadorDuplicado[1].style.display='none';
 }
@@ -51,7 +54,7 @@ async function closeOrderModal(e){if(!e)return;try{if(window.bootstrap?.Modal){c
 async function setStatus(id,status){const d=getDb(),o=d?.orders?.find(x=>String(x.id)===String(id));if(!o||!S.includes(status))return;o.status=status;o.updatedAt=new Date().toISOString();if(status==='Entregado')o.deliveredAt=o.updatedAt;if(status==='Cancelado')o.cancelledAt=o.updatedAt;history(o,'Estado: '+status);await save();render();toast('Pedido '+o.id+': '+status+'.')}
 function details(o){const items=(o.items||[]).map(x=>`<tr><td>${esc(x.name)}</td><td>${x.qty}</td><td>${money(x.price)}</td><td>${money(x.qty*x.price)}</td></tr>`).join('');frame('ventaraOrderDetails','Detalle del pedido',`<div class="form"><div class="field"><label>ID PEDIDO</label><input value="${esc(o.id)}" disabled></div><div class="field"><label>CLIENTE</label><input value="${esc(o.customer||'Consumidor Final')}" disabled></div><div class="field"><label>TELÉFONO</label><input value="${esc(o.phone||'—')}" disabled></div><div class="field full"><label>DIRECCIÓN</label><input value="${esc(o.address||'—')}" disabled></div><div class="field"><label>FECHA</label><input value="${esc(date(o.deliveryDate))}" disabled></div><div class="field"><label>HORA</label><input value="${esc(o.deliveryTime||'—')}" disabled></div><div class="field"><label>ESTADO</label><select id="detailStatus">${statusOptions(o.status)}</select></div></div><div class="tablewrap"><table class="table"><thead><tr><th>Producto</th><th>Cantidad</th><th>Precio Unit.</th><th>Subtotal</th></tr></thead><tbody>${items||'<tr><td colspan="4">Sin ítems</td></tr>'}</tbody></table></div><div class="totalline grand"><span>Total</span><b>${money(total(o))}</b></div><div class="actions" style="margin-top:16px"><button type="button" class="btn" id="detailClose">Cerrar</button><button type="button" class="btn primary" id="detailEdit">Editar</button></div>`);q('#detailStatus').onchange=()=>{setStatus(o.id,q('#detailStatus').value);document.getElementById('ventaraOrderDetails')?.remove()};q('#detailClose').onclick=()=>document.getElementById('ventaraOrderDetails')?.remove();q('#detailEdit').onclick=()=>{document.getElementById('ventaraOrderDetails')?.remove();openModal(o)}}
 function mount(){const r=root();if(!r)return false;if(!r.querySelector('.ventara-orders-card'))return render();return true}
-function watch(){let scheduled=false;const tick=()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;const r=root();if(r&&!r.querySelector('.ventara-orders-card'))render();else removeDuplicateFilter()})};tick();new MutationObserver(tick).observe(document.body,{childList:true,subtree:true});setInterval(tick,1000)}
+function watch(){let scheduled=false;const tick=()=>{if(!appActive())return;if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;if(!appActive())return;const r=root();if(r&&!r.querySelector('.ventara-orders-card'))render();else removeDuplicateFilter()})};tick();new MutationObserver(tick).observe(document.body,{childList:true,subtree:true})}
 window.ventaraOrders={render,openNew:()=>openModal(),setStatus};window.renderOrders=render;window.openOrderModal=()=>openModal();window.setOrderStatus=setStatus;
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',watch,{once:true});else watch();
 })();
