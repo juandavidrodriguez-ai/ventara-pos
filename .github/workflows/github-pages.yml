@@ -2,7 +2,7 @@ name: Deploy Ventara POS to GitHub Pages
 
 on:
   push:
-    branches: [dev]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -21,7 +21,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout dev
+      - name: Checkout main
         uses: actions/checkout@v4
 
       - name: Setup Pages
