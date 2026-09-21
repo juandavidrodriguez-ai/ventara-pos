@@ -13,15 +13,49 @@ const isCreditPayment=()=>{
     document.getElementById('creditFields')?.style.display!=='none';
 };
 
-const normalizeSelect=()=>{
+const escapeHtml=(value)=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+const getClients=()=>{
+  try{
+    const db=window.db;
+    return Array.isArray(db?.clients)?db.clients:[];
+  }catch{return []}
+};
+
+const rebuildClientSelect=()=>{
   const s=document.getElementById('creditClientSelect');
   if(!s)return false;
-  Array.from(s.options).forEach(o=>{if(o.value==='undefined'||o.value==='null')o.value=''});
+  const current=String(s.value||'');
+  const clients=getClients().filter(c=>{
+    const id=c?.id??c?.client_id;
+    const name=c?.nombre??c?.name;
+    return id!==undefined&&id!==null&&String(id)!=='0'&&String(name??'').trim()!=='';
+  });
+  s.innerHTML='<option value="">-- Selecciona un cliente --</option>'+clients.map(c=>{
+    const id=c?.id??c?.client_id;
+    const name=c?.nombre??c?.name;
+    return '<option value="'+escapeHtml(id)+'">'+escapeHtml(name)+'</option>';
+  }).join('');
+  if(current&&Array.from(s.options).some(o=>String(o.value)===current))s.value=current;
   s.addEventListener('change',()=>{
     const id=String(s.value||'').trim();
-    if(id&&id!=='0'&&id!=='undefined'){window.posClient=id;hideWarning()}
-  });
-  if(s.value&&s.value!=='0'&&s.value!=='undefined'){window.posClient=String(s.value);hideWarning()}
+    if(id&&id!=='0'&&id!=='undefined'){
+      const client=getClients().find(c=>String(c?.id??c?.client_id)===id);
+      if(client){
+        if(client.id===undefined||client.id===null)client.id=client.client_id;
+        window.posClient=client.id;
+        hideWarning();
+      }
+    }
+  },{once:false});
+  if(s.value&&s.value!=='0'&&s.value!=='undefined'){
+    const client=getClients().find(c=>String(c?.id??c?.client_id)===String(s.value));
+    if(client){
+      if(client.id===undefined||client.id===null)client.id=client.client_id;
+      window.posClient=client.id;
+      hideWarning();
+    }
+  }
   return true;
 };
 
@@ -46,7 +80,7 @@ const patchModal=()=>{
     const originalOpen=window.openPaymentModalPOS;
     window.openPaymentModalPOS=function(){
       const result=originalOpen.apply(this,arguments);
-      setTimeout(normalizeSelect,0);
+      setTimeout(rebuildClientSelect,0);
       return result;
     };
     window.__ventaraCreditOpenPatched=true;
@@ -60,48 +94,42 @@ const patchModal=()=>{
 
       try{
         const clientSelect=document.getElementById('creditClientSelect');
-        const rawId=clientSelect?String(clientSelect.value||'').trim():'';
-        if(!rawId||rawId==='0'||rawId==='undefined')throw new Error('Debe seleccionar un cliente');
+        const selectedId=String(clientSelect?.value||'').trim();
+        if(!selectedId||selectedId==='0'||selectedId==='undefined'){
+          throw new Error('Debe seleccionar un cliente para vender a crédito');
+        }
 
-        /* finishSale() compara client.id con ===. Conservamos el tipo real del ID. */
-        const db=getDb();
-        const clients=Array.isArray(db?.clients)?db.clients:[];
-        const client=clients.find(c=>String(c?.id)===rawId);
-        if(!client)throw new Error('No se encontró el cliente seleccionado');
+        const clients=getClients();
+        const clienteEncontrado=clients.find(c=>String(c?.id??c?.client_id)===selectedId);
+        if(!clienteEncontrado){
+          throw new Error('No se encontró el cliente seleccionado en la memoria local.');
+        }
 
-        window.posClient=client.id;
+        if(clienteEncontrado.id===undefined||clienteEncontrado.id===null){
+          clienteEncontrado.id=clienteEncontrado.client_id;
+        }
+        window.posClient=clienteEncontrado.id;
         hideWarning();
 
-        const before=new Set(Array.isArray(db?.sales)?db.sales.map(s=>s.id):[]);
-        let result;
-
-        try{
-          result=originalConfirm.apply(this,arguments);
-        }catch(innerError){
-          console.error('[VENTARA] Error al registrar venta a crédito:',innerError);
-          throw innerError;
+        if(typeof window.finishSale!=='function'){
+          throw new Error('No está disponible la función de registro de ventas.');
         }
 
-        /* La función nativa devuelve la venta cuando finishSale() termina correctamente. */
-        if(result&&result.id){
-          return result;
+        /* Crédito: se usa el flujo nativo de finishSale y únicamente se controla aquí el error. */
+        const sale=window.finishSale('Crédito',total);
+        if(!sale||!sale.id){
+          throw new Error('La venta a crédito no pudo registrarse. Verifica el límite de crédito y los datos del cliente.');
         }
 
-        /* Si una operación posterior dejó la venta creada, no bloqueamos el ticket. */
-        const sale=findNewSale(before);
-        if(sale){
-          try{
-            if(!sale.clientId)sale.clientId=client.id;
-            if(!sale.total)sale.total=Number(total)||0;
-            if(!sale.created_at)sale.created_at=new Date().toISOString();
-            if(!sale.status)sale.status='Crédito';
-            if(typeof window.save==='function')window.save();
-          }catch(normalizeError){console.warn('[VENTARA] normalización final de crédito',normalizeError)}
-          showTicketAfterCreditSave(sale);
-          return sale;
+        if(typeof window.offerTicket==='function'){
+          window.offerTicket(sale.id);
+        }else if(typeof window.printTicket==='function'){
+          window.printTicket(sale.id);
+        }else{
+          throw new Error('La venta fue registrada, pero no está disponible la función de impresión del ticket.');
         }
 
-        return result;
+        return sale;
       }catch(error){
         console.error('[VENTARA] Error al registrar venta a crédito:',error);
         alert('No se pudo registrar la venta a crédito: '+(error?.message||String(error)));
@@ -111,7 +139,7 @@ const patchModal=()=>{
     window.__ventaraCreditConfirmPatched=true;
   }
 
-  return normalizeSelect();
+  return rebuildClientSelect();
 };
 
 patchModal();
