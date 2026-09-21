@@ -31,6 +31,8 @@ const rebuildClientSelect=()=>{
     const name=c?.nombre??c?.name;
     return id!==undefined&&id!==null&&String(id)!=='0'&&String(name??'').trim()!=='';
   });
+  const signature=clients.map(c=>String(c?.id??c?.client_id)+'|'+String(c?.nombre??c?.name??'')).join('||');
+  if(s.dataset.ventaraClientSignature===signature)return true;
   s.innerHTML='<option value="">-- Selecciona un cliente --</option>'+clients.map(c=>{
     const id=c?.id??c?.client_id;
     const name=c?.nombre??c?.name;
@@ -48,6 +50,7 @@ const rebuildClientSelect=()=>{
       }
     }
   },{once:false});
+  s.dataset.ventaraClientSignature=signature;
   if(s.value&&s.value!=='0'&&s.value!=='undefined'){
     const client=getClients().find(c=>String(c?.id??c?.client_id)===String(s.value));
     if(client){
