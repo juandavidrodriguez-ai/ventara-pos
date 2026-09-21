@@ -12,7 +12,17 @@ function installOrdersFilterGuard(){
 #orders div:has(> input[placeholder*="NIT"]),
 #orders #pedidos-container .row:nth-of-type(2) .card-body > div:nth-child(2),
 #orders .orders-filter-container ~ .orders-filter-container,
-#orders #pedidos-view .card-body > div:nth-child(2) .row:nth-child(2) { display:none !important; }`;
+#orders #pedidos-view .card-body > div:nth-child(2) .row:nth-child(2) { display:none !important; }
+/* Ocultar únicamente el contenedor de la segunda barra duplicada */
+.pedidos-container .row:nth-of-type(2),
+div:has(> input[placeholder*="NIT o cliente"]) {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}`;
     document.head.appendChild(style);
   }
 }
@@ -68,4 +78,49 @@ function mount(){const r=root();if(!r)return false;if(!r.querySelector('.ventara
 function watch(){let scheduled=false;const tick=()=>{if(!appActive())return;if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;if(!appActive())return;const r=root();if(r&&!r.querySelector('.ventara-orders-card'))render();else removeDuplicateFilter()})};const host=document.getElementById('mainApp');if(!host)return;new MutationObserver(tick).observe(host,{childList:true,subtree:true});tick()}
 window.ventaraOrders={render,openNew:()=>openModal(),setStatus};window.renderOrders=render;window.openOrderModal=()=>openModal();window.setOrderStatus=setStatus;
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installOrdersFilterGuard();watch()},{once:true});else{installOrdersFilterGuard();watch();}
+
+/* Cobro a crédito: validación DOM aislada y delegación al flujo nativo de venta. */
+function installCreditPaymentGuard(){
+  if(window.__ventaraCreditPaymentGuard)return;
+  window.__ventaraCreditPaymentGuard=true;
+  document.addEventListener('click',function(ev){
+    const button=ev.target.closest('button');
+    if(!button)return;
+    if(!(button.textContent||'').trim().includes('CONFIRMAR Y REGISTRAR VENTA'))return;
+    const creditFields=document.getElementById('creditFields');
+    if(!creditFields || getComputedStyle(creditFields).display==='none')return;
+
+    const creditSelect=document.getElementById('creditClientSelect') || creditFields.querySelector('select');
+    const selectedOpt=creditSelect && creditSelect.selectedIndex>=0 ? creditSelect.options[creditSelect.selectedIndex] : null;
+    const clientId=creditSelect ? creditSelect.value : '';
+    const clientName=selectedOpt ? selectedOpt.text : '';
+    if(!clientId && (!clientName || clientName.toLowerCase().includes('selecciona'))){
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      alert('Por favor selecciona un cliente para la venta a crédito.');
+      return;
+    }
+
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    try{
+      if(typeof window.selectPay==='function')window.selectPay('Crédito');
+      const attr=button.getAttribute('onclick')||'';
+      const m=attr.match(/confirmPayment\(([^,]+)/);
+      const total=Number(m&&m[1])||0;
+      if(typeof window.confirmPayment==='function'){
+        const sale=window.confirmPayment(total,ev);
+        if(sale && typeof window.printTicket==='function'){
+          setTimeout(()=>window.printTicket(sale.id),50);
+        }
+      }else{
+        alert('No se encontró la función de registro de venta.');
+      }
+    }catch(err){
+      console.error('[VENTARA] Cobro crédito:',err);
+      alert('No se pudo registrar la venta a crédito: '+(err&&err.message||String(err)));
+    }
+  },true);
+}
+installCreditPaymentGuard();
 })();
