@@ -70,20 +70,46 @@ window.ventaraOrders={render,openNew:()=>openModal(),setStatus};window.renderOrd
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installOrdersFilterGuard();watch()},{once:true});else{installOrdersFilterGuard();watch();}
 
 function confirmarVentaCreditoDirecta(totalVenta,e){
-  const select=document.getElementById('creditClientSelect')||document.querySelector('#creditFields select');
-  const clienteId=select?select.value:null;
-  const clienteNombre=select&&select.selectedIndex>=0?select.options[select.selectedIndex].text:'';
-  if(!clienteId&&(!clienteNombre||clienteNombre.includes('Selecciona'))){
-    alert('Por favor selecciona un cliente válido.');
-    return;
+  try{
+    if(e){e.preventDefault();e.stopPropagation()}
+    const select=document.getElementById('creditClientSelect')||document.querySelector('#creditFields select');
+    const clienteId=select?select.value:null;
+    const clienteNombre=select&&select.selectedIndex>=0?select.options[select.selectedIndex].text:'';
+    if(!clienteId||!clienteNombre||clienteNombre.includes('Selecciona')){
+      alert('Por favor selecciona un cliente válido.');
+      return null;
+    }
+    const errorLabel=document.querySelector('#creditClientError, #creditWarning, .text-danger');
+    if(errorLabel)errorLabel.style.display='none';
+    if(typeof window.finishSale==='function'){
+      const total=Number(totalVenta)||0;
+      const sale=window.finishSale('Crédito',total);
+      if(sale&&typeof window.offerTicket==='function')window.offerTicket(sale.id);
+      return sale;
+    }
+    alert('No se encontró la función nativa de registro de venta.');
+    return null;
+  }catch(err){
+    console.error('[VENTARA] Crédito directo:',err);
+    alert('No se pudo registrar la venta a crédito: '+(err?.message||String(err)));
+    return null;
   }
-  const errorLabel=document.querySelector('.text-danger, #creditClientError, #creditWarning');
-  if(errorLabel)errorLabel.style.display='none';
-  if(typeof window.confirmPayment==='function'&&!window.__ventaraDirectCreditPatched){
-    return window.confirmPayment(totalVenta,e);
-  }
-  if(typeof window.vaciarCarrito==='function')window.vaciarCarrito();
-  window.print();
 }
 window.confirmarVentaCreditoDirecta=confirmarVentaCreditoDirecta;
+function installCreditDirectHandler(){
+  if(window.__ventaraCreditDirectHandler)return;
+  window.__ventaraCreditDirectHandler=true;
+  document.addEventListener('click',ev=>{
+    const b=ev.target.closest('button');
+    if(!b)return;
+    const txt=(b.textContent||'').trim();
+    if(!txt.includes('CONFIRMAR Y REGISTRAR VENTA'))return;
+    if(!document.getElementById('creditFields')||document.getElementById('creditFields').style.display==='none')return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    const total=Number((b.getAttribute('onclick')||'').match(/confirmPayment\(([^,]+)/)?.[1])||0;
+    confirmarVentaCreditoDirecta(total,ev);
+  },true);
+}
+installCreditDirectHandler();
 })();
