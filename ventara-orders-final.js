@@ -99,13 +99,30 @@ function installCreditDirectHandler(){
   document.addEventListener('click',ev=>{
     const b=ev.target.closest('button');
     if(!b)return;
-    const txt=(b.textContent||'').trim();
-    if(!txt.includes('CONFIRMAR Y REGISTRAR VENTA'))return;
-    if(!document.getElementById('creditFields')||document.getElementById('creditFields').style.display==='none')return;
-    ev.preventDefault();
-    ev.stopImmediatePropagation();
-    const total=Number((b.getAttribute('onclick')||'').match(/confirmPayment\(([^,]+)/)?.[1])||0;
-    confirmarVentaCreditoDirecta(total,ev);
+    if(!(b.textContent||'').trim().includes('CONFIRMAR Y REGISTRAR VENTA'))return;
+    const fields=document.getElementById('creditFields');
+    if(!fields||getComputedStyle(fields).display==='none')return;
+    const select=document.getElementById('creditClientSelect')||document.querySelector('#creditFields select');
+    if(!select||!select.value)return;
+    /*
+     * Reemplazamos SOLO el onclick de este botón cuando Crédito está activo.
+     * Así no se ejecuta el onclick nativo antiguo en paralelo.
+     */
+    b.onclick=function(event){
+      if(event){event.preventDefault();event.stopPropagation();}
+      try{
+        if(typeof window.selectPay==='function')window.selectPay('Crédito');
+        if(typeof posClient!=='undefined')posClient=select.value;
+        if(typeof window.confirmPayment==='function'){
+          return window.confirmPayment(Number((b.getAttribute('onclick')||'').match(/confirmPayment\\(([^,]+)/)?.[1])||0,event);
+        }
+        alert('No se encontró la función de confirmación de venta.');
+      }catch(err){
+        console.error('[VENTARA] Crédito confirmar:',err);
+        alert('No se pudo registrar la venta a crédito: '+(err?.message||String(err)));
+      }
+    };
+    b.removeAttribute('onclick');
   },true);
 }
 installCreditDirectHandler();
