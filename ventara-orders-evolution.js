@@ -18,7 +18,7 @@ const save=async()=>{try{if(typeof window.save==='function')window.save()}catch{
 const toast=m=>{try{if(typeof window.toast==='function')window.toast(m);else console.log('[VENTARA]',m)}catch{}};
 let draft=[],editingId=null,filters={text:'',status:'Todos',alert:'Todos'};
 const normalize=s=>S.includes(String(s))?String(s):'Pendiente';
-const alertInfo=o=>{const st=normalize(o?.status);if(st==='Entregado')return ['ENTREGADO','g'];if(st==='Cancelado')return ['CANCELADO','r'];const d=String(o?.deliveryDate||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return ['SIN FECHA','m'];const t=today();return d===t?['¡ENTREGAR HOY!','w']:d<t?['¡VENCIDO / RETRASADO!','r']:['PROGRAMADO','b']};
+const alertInfo=o=>{const st=normalize(o?.status);if(st==='Entregado')return ['ENTREGADO','g'];if(st==='Cancelado')return ['CANCELADO','r'];const d=String(orderDate(o)||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return ['SIN FECHA','m'];const t=today();if(d<t)return ['¡VENCIDO / RETRASADO!','r'];if(d>t)return ['PROGRAMADO','b'];const tm=String(o?.deliveryTime||'');if(/^\d{2}:\d{2}$/.test(tm)){const now=new Date(),cur=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;if(cur>tm)return ['¡VENCIDO / RETRASADO!','r'];}return ['¡ENTREGAR HOY!','w']};
 const badge=(v,c)=>`<span class="badge ${c}">${esc(v)}</span>`;
 const total=o=>Number.isFinite(Number(o?.total))?Number(o.total)||0:(Array.isArray(o?.items)?o.items:[]).reduce((a,i)=>a+(Number(i?.qty)||0)*(Number(i?.price)||0),0);
 const customerFor=o=>{const a=customers();const cid=o?.customerId??o?.clientId??'';return a.find(c=>String(c?.id)===String(cid))||a.find(c=>cn(c)===String(o?.customer||''))||a[0]};
