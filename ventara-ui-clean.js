@@ -49,14 +49,23 @@
 
     syncingUsers = true;
     try {
-      const { data, error } = await c.from('ventara_state').select('state').maybeSingle();
-      if (error) throw error;
-      const users = data?.state?.users;
-      if (!Array.isArray(users)) return;
+      const companyId = currentUser?.company_id || window.currentCompanyId || null;
+      let query = c.from('ventara_accounts')
+        .select('user_id,username,full_name,role,active,company_id,created_at')
+        .order('created_at', { ascending:true });
 
-      const normalizedUsers = users.map(u => ({
-        ...u,
-        permissions: ROLE_PERMISSIONS_VIEW[u.role] || []
+      if (companyId) query = query.eq('company_id', companyId);
+
+      const { data: accounts, error } = await query;
+      if (error) throw error;
+
+      const normalizedUsers = (accounts || []).map(u => ({
+        id:u.user_id,
+        name:u.full_name,
+        username:u.username,
+        role:u.role,
+        active:u.active,
+        permissions:ROLE_PERMISSIONS_VIEW[u.role] || []
       }));
       const signature = JSON.stringify(normalizedUsers.map(u => ({
         id:u.id, name:u.name, username:u.username, role:u.role, active:u.active
@@ -65,6 +74,7 @@
       if (signature === lastUsersSignature) return;
       lastUsersSignature = signature;
       d.users = normalizedUsers;
+      try { localSave(); } catch (_) {}
       refresh();
     } catch (e) {
       console.error('VENTARA usuarios: sincronización no disponible', e);
@@ -151,35 +161,41 @@
     if (isSubmittingUser) return;
     if (!admin()) return toast('Solo un Administrador puede crear usuarios');
 
-    const submitButton = document.querySelector('#users .modalbox button.btn.primary, #users button.btn.primary');
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.setAttribute('aria-disabled', 'true');
-    }
-    isSubmittingUser = true;
-
     const role = String(document.getElementById('u_role')?.value || 'Cajero');
     const name = String(document.getElementById('u_name')?.value || '').trim();
     const username = String(document.getElementById('u_username')?.value || '').trim().toLowerCase();
     const password = String(document.getElementById('u_password')?.value || '');
     const password2 = String(document.getElementById('u_password2')?.value || '');
     const active = document.getElementById('u_active')?.value === '1';
+
     if (!name) return toast('Escribe el nombre');
     if (!/^[a-z0-9._-]{3,30}$/.test(username)) return toast('Usuario inválido');
     if (password.length < 6) return toast('La contraseña debe tener mínimo 6 caracteres');
     if (password !== password2) return toast('Las contraseñas no coinciden');
+
+    const submitButton = document.querySelector('#modalbox button.btn.primary[onclick*="saveUser"], #modal button.btn.primary[onclick*="saveUser"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.setAttribute('aria-disabled', 'true');
+    }
+    isSubmittingUser = true;
+
     try {
       const data = await invoke({ username, fullName:name, password, role, active });
+      if (!data?.userId) throw new Error('Supabase no devolvió el ID del usuario creado');
+
       const d = appDb();
       if (d) {
-        d.users = (d.users || []).filter(u => u.id !== data.userId);
+        d.users = (d.users || []).filter(u => u.id !== data.userId && u.username !== username);
         d.users.push({ id:data.userId, name, username, role, active, permissions:ROLE_PERMISSIONS_VIEW[role] || [] });
         try { localSave(); } catch (_) {}
       }
-      closeModal();
+
       lastUsersSignature = '';
+      closeModal();
+      refresh();
       toast('Usuario creado correctamente en la nube');
-      setTimeout(syncUsersFromCloud, 150);
+      await syncUsersFromCloud();
     } catch (e) {
       console.error('VENTARA usuarios: creación', e);
       toast(e.message || 'No se pudo crear el usuario');
