@@ -208,7 +208,7 @@
     }
   }
 
-  window.saveUser = createUserWithoutGenericSave;
+  /* El formulario nativo de index.html es la única autoridad para crear usuarios.\n     Este módulo solo conserva edición/eliminación y sincronización de la lista. */
 
   window.editVentaraUser = editUser;
   window.saveEditedUser = saveEditedUser;
