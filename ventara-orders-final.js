@@ -1,6 +1,13 @@
 /* VENTARA POS — Pedidos. Módulo aislado: #orders + window.db.orders. */
 (()=>{'use strict';
+console.log("PARCHE PEDIDOS APLICADO CORRECTAMENTE");
 const S=['Pendiente','Entregado','Cancelado'],q=s=>document.querySelector(s),root=()=>q('#orders');
+function applyImmediateOrdersPatch(){
+  const scope=document.querySelector('#orders')||document;
+  const buscadorDuplicado=scope.querySelectorAll('.orders-search-filter, .filter-bar-container, div[class*="search"]');
+  if(buscadorDuplicado.length>1)buscadorDuplicado[1].style.display='none';
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',applyImmediateOrdersPatch,{once:true});else applyImmediateOrdersPatch();
 const getDb=()=>{try{if(typeof db!=='undefined'&&db&&typeof db==='object')return db}catch(e){}try{if(typeof window.db==='object'&&window.db)return window.db}catch(e){}return null};
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const money=v=>{try{return typeof window.money==='function'?window.money(Number(v)||0):'$ '+Number(v||0).toLocaleString('es-CO')}catch{return '$ '+Number(v||0).toLocaleString('es-CO')}};
