@@ -1,7 +1,7 @@
 /* VENTARA POS — Pedidos. Módulo aislado: #orders + window.db.orders. */
 (()=>{'use strict';
 const S=['Pendiente','Entregado','Cancelado'],q=s=>document.querySelector(s),root=()=>q('#orders');
-const db=()=>window.db&&typeof window.db==='object'?window.db:null;
+const db=()=>{try{return typeof window.db==='object'&&window.db?window.db:(typeof window.db!=='undefined'?window.db:(typeof db!=='undefined'?db:null))}catch(e){try{return db}catch(_){return null}}};
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const money=v=>{try{return typeof window.money==='function'?window.money(Number(v)||0):'$ '+Number(v||0).toLocaleString('es-CO')}catch{return '$ '+Number(v||0).toLocaleString('es-CO')}};
 const products=()=>{const d=db();return Array.isArray(d?.products)?d.products:[]};
@@ -12,7 +12,7 @@ const pp=p=>Number(p?.price??p?.salePrice??p?.sellingPrice??p?.precioVenta??p?.p
 const cn=c=>String(c?.name||c?.fullName||c?.nombre||c?.businessName||c?.razonSocial||c?.commercialName||'Cliente');
 const cp=c=>String(c?.phone||c?.telephone||c?.telefono||c?.mobile||c?.celular||c?.phoneNumber||'');
 const ca=c=>String(c?.address||c?.direccion||c?.deliveryAddress||'');
-const today=()=>{const d=new Date();return d.toISOString().slice(0,10)};
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 const date=v=>{const a=String(v||'').split('-');return a.length===3?(`${a[2]}/${a[1]}/${a[0]}`):String(v||'—')};
 const save=async()=>{try{if(typeof window.save==='function')window.save()}catch{}try{if(typeof window.cloudSave==='function')await window.cloudSave()}catch(e){console.warn('[VENTARA] orders cloud save',e)}};
 const toast=m=>{try{if(typeof window.toast==='function')window.toast(m);else console.log('[VENTARA]',m)}catch{}};
