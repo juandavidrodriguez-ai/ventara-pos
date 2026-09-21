@@ -81,11 +81,8 @@ function confirmarVentaCreditoDirecta(totalVenta,e){
     }
     const errorLabel=document.querySelector('#creditClientError, #creditWarning, .text-danger');
     if(errorLabel)errorLabel.style.display='none';
-    if(typeof window.finishSale==='function'){
-      const total=Number(totalVenta)||0;
-      const sale=window.finishSale('Crédito',total);
-      if(sale&&typeof window.offerTicket==='function')window.offerTicket(sale.id);
-      return sale;
+    if(typeof window.confirmPayment==='function'){
+      return window.confirmPayment(Number(totalVenta)||0,e);
     }
     alert('No se encontró la función nativa de registro de venta.');
     return null;
