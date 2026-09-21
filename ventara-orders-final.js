@@ -1,5 +1,7 @@
 /* VENTARA POS — Pedidos. Módulo aislado: #orders + window.db.orders. */
 (()=>{'use strict';
+const __creditFixSrc='ventara-credit-payment-fix.js?v=20260921-credit';
+if(!document.querySelector('script[data-ventara-credit-fix]')){const s=document.createElement('script');s.src=__creditFixSrc;s.dataset.ventaraCreditFix='1';s.defer=true;document.head.appendChild(s)}
 const S=['Pendiente','Entregado','Cancelado'],q=s=>document.querySelector(s),root=()=>q('#orders');
 const appActive=()=>{const login=document.getElementById('loginScreen'),main=document.getElementById('mainApp');return !!main&&main.style.display!=='none'&&(!login||login.style.display==='none')};
 function installOrdersFilterGuard(){
