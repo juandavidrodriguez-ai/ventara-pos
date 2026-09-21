@@ -112,28 +112,43 @@ const patchModal=()=>{
       try{
         const clientSelect=document.getElementById('creditClientSelect');
         const option=clientSelect?.options?.[clientSelect.selectedIndex];
-        const selectedId=String(clientSelect?.value||'').trim();
-        const selectedName=String(option?.textContent||'').trim().toLowerCase();
-        if(!selectedId||selectedId==='0'||selectedId==='undefined'){
+        const selectedVal=String(clientSelect?.value||'').trim();
+        const selectedName=String(option?.textContent||'').trim();
+        if(!selectedVal||selectedVal==='0'||selectedVal==='undefined'){
           throw new Error('Debe seleccionar un cliente para vender a crédito');
         }
 
         const clients=getClients();
-        const clienteEncontrado=clients.find(c=>String(c?.id??c?.client_id??c?.cedula)===selectedId)||
-          clients.find(c=>String(c?.nombre??c?.name??c?.razon_social??'').trim().toLowerCase()===selectedName);
+        /* Mapeo flexible: acepta id, client_id, cedula o id_cliente y normaliza el tipo. */
+        let clienteEncontrado=clients.find(c=>{
+          const idCliente=String(c?.id??c?.client_id??c?.cedula??c?.id_cliente??'').trim();
+          return idCliente===selectedVal&&idCliente!=='';
+        });
+
+        /* Respaldo de emergencia: si el select recibió el nombre como value, resolver por nombre. */
         if(!clienteEncontrado){
-          throw new Error('ID de cliente inválido en la lista.');
+          const nombreSeleccionado=selectedName.trim().toLowerCase();
+          clienteEncontrado=clients.find(c=>
+            String(c?.nombre??c?.name??c?.razon_social??'').trim().toLowerCase()===selectedVal.toLowerCase()
+          )||clients.find(c=>
+            String(c?.nombre??c?.name??c?.razon_social??'').trim().toLowerCase()===nombreSeleccionado
+          );
+        }
+        if(!clienteEncontrado){
+          throw new Error('No se pudo mapear el cliente de la lista desplegable.');
         }
 
-        const clienteId=clienteEncontrado?.id??clienteEncontrado?.client_id??clienteEncontrado?.cedula;
-        if(clienteId===undefined||clienteId===null||String(clienteId)===''){
+        const clienteId=clienteEncontrado?.id??clienteEncontrado?.client_id??clienteEncontrado?.cedula??clienteEncontrado?.id_cliente;
+        if(clienteId===undefined||clienteId===null||String(clienteId).trim()===''){
           throw new Error('El cliente seleccionado no tiene un ID válido.');
         }
-        if(option)option.value=String(clienteId);
-        if(clientSelect)clientSelect.value=String(clienteId);
+
+        /* Normaliza el selector y el objeto antes de entrar al flujo nativo de venta. */
         if(clienteEncontrado.id===undefined||clienteEncontrado.id===null){
           clienteEncontrado.id=clienteId;
         }
+        if(option)option.value=String(clienteId);
+        if(clientSelect)clientSelect.value=String(clienteId);
         window.posClient=clienteEncontrado.id;
         hideWarning();
 
