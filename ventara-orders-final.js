@@ -2,12 +2,24 @@
 (()=>{'use strict';
 const S=['Pendiente','Entregado','Cancelado'],q=s=>document.querySelector(s),root=()=>q('#orders');
 const appActive=()=>{const login=document.getElementById('loginScreen'),main=document.getElementById('mainApp');return !!main&&main.style.display!=='none'&&(!login||login.style.display==='none')};
-function applyImmediateOrdersPatch(){
-  if(!appActive())return;
-  const scope=document.querySelector('#orders');
-  if(!scope)return;
-  const buscadorDuplicado=scope.querySelectorAll('.orders-search-filter, .filter-bar-container, div[class*="search"]');
-  if(buscadorDuplicado.length>1)buscadorDuplicado[1].style.display='none';
+function installOrdersFilterGuard(){
+  const id='ventara-orders-filter-guard';
+  if(!document.getElementById(id)){
+    const style=document.createElement('style');
+    style.id=id;
+    style.textContent=`#orders .orders-filter-container ~ .orders-filter-container,
+#orders #pedidos-view .card-body > div:nth-child(2) .row:nth-child(2),
+#orders div:has(> input[placeholder*="NIT"]) { display:none !important; }`;
+    document.head.appendChild(style);
+  }
+}
+function removeDuplicateFilter(){
+  const r=root();if(!r)return;
+  Array.from(r.querySelectorAll('div:has(> input[placeholder*="NIT"])')).forEach(el=>el.remove());
+  const selectors=['.orders-search-filter','.filter-bar-container','.orders-filter-bar','.order-filters','.search-filter','.filters-bar'];
+  const seen=[];
+  selectors.forEach(sel=>Array.from(r.querySelectorAll(sel)).forEach(el=>{if(!seen.includes(el))seen.push(el)}));
+  if(seen.length>1)seen.slice(1).forEach(el=>el.remove());
 }
 const getDb=()=>{try{if(typeof db!=='undefined'&&db&&typeof db==='object')return db}catch(e){}try{if(typeof window.db==='object'&&window.db)return window.db}catch(e){}return null};
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -37,7 +49,7 @@ const statusOptions=s=>S.map(x=>`<option value="${x}" ${x===normalize(s)?'select
 function history(o,action){o.history=Array.isArray(o.history)?o.history:[];o.history.push({action,at:new Date().toISOString()})}
 function row(o){const [al,ac]=alertInfo(o),c=customerFor(o),st=normalize(o.status);return `<tr><td><b>${esc(orderId(o)||'—')}</b></td><td>${esc(o.customer||cn(c)||'Consumidor Final')}</td><td style="white-space:normal">${esc(o.address||'—')}<br><small class="muted">${esc(o.phone||cp(c)||'Sin teléfono')}</small></td><td>${esc([date(orderDate(o)),o.deliveryTime].filter(x=>x&&x!=='—').join(' · ')||'Sin programar')}</td><td><b>${money(total(o))}</b></td><td><select class="order-status-select" data-id="${esc(o.id)}" aria-label="Estado del pedido ${esc(o.id)}">${statusOptions(st)}</select></td><td>${badge(al,ac)}</td><td><div class="actions" style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn sm" data-action="details" data-id="${esc(o.id)}">Ver detalles</button>${st==='Pendiente'?'<button type="button" class="btn sm success" data-action="deliver" data-id="'+esc(o.id)+'">Marcar entregado</button><button type="button" class="btn sm danger" data-action="cancel" data-id="'+esc(o.id)+'">Cancelar</button>':''}</div></td></tr>`}
 function removeDuplicateFilter(){const r=root();if(!r)return;const selectors=['.orders-search-filter','.filter-bar-container','.orders-filter-bar','.order-filters','.search-filter','.filters-bar'];const seen=[];selectors.forEach(sel=>Array.from(r.querySelectorAll(sel)).forEach(el=>{if(!seen.includes(el))seen.push(el)}));if(seen.length>1)seen.slice(1).forEach(el=>el.remove());Array.from(r.querySelectorAll('label')).filter(x=>x.textContent.trim()==='Buscar').forEach(label=>{const box=label.closest('.field')?.parentElement||label.parentElement?.parentElement;if(box&&box!==r&&!box.querySelector('#ventaraOrderFilterText')&&box.querySelector('select'))box.remove()});Array.from(r.querySelectorAll('input[type="search"]')).filter(x=>x.id!=='ventaraOrderFilterText').forEach(input=>{const box=input.closest('.field')?.parentElement||input.parentElement?.parentElement;if(box&&box!==r)box.remove()})}
-function render(){const r=root(),all=orders();if(!r)return false;const list=all.filter(matches),t=today(),pending=all.filter(o=>normalize(o.status)==='Pendiente'),todayN=pending.filter(o=>orderDate(o)===t).length,overdue=pending.filter(o=>orderDate(o)&&orderDate(o)<t).length,scheduled=pending.filter(o=>orderDate(o)&&orderDate(o)>t).length,delivered=all.filter(o=>normalize(o.status)==='Entregado').length,cancelled=all.filter(o=>normalize(o.status)==='Cancelado').length;
+function render(){const r=root(),all=orders();if(!r)return false;installOrdersFilterGuard();const list=all.filter(matches),t=today(),pending=all.filter(o=>normalize(o.status)==='Pendiente'),todayN=pending.filter(o=>orderDate(o)===t).length,overdue=pending.filter(o=>orderDate(o)&&orderDate(o)<t).length,scheduled=pending.filter(o=>orderDate(o)&&orderDate(o)>t).length,delivered=all.filter(o=>normalize(o.status)==='Entregado').length,cancelled=all.filter(o=>normalize(o.status)==='Cancelado').length;
 r.innerHTML=`<div class="head"><div><h1>Pedidos</h1><p>Despacho, entregas programadas y seguimiento preventivo.</p></div><div class="actions"><button id="ventaraNewOrder" class="btn primary" type="button">+ Nuevo pedido</button></div></div>
 <div class="card ventara-orders-card"><div class="ventara-orders-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px"><span><b>${pending.length}</b> pendientes</span><span><b>${todayN}</b> entregar hoy</span><span><b>${overdue}</b> retrasados</span><span><b>${scheduled}</b> programados</span><span><b>${delivered}</b> entregados</span><span><b>${cancelled}</b> cancelados</span></div>
 <div class="ventara-orders-filters" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:14px 0"><div class="field" style="flex:1;min-width:220px"><label>Buscar pedido</label><input id="ventaraOrderFilterText" type="search" value="${esc(filters.text)}" placeholder="Pedido, factura, referencia, cédula, único o cliente"></div><div class="field"><label>Estado</label><select id="ventaraOrderFilterStatus"><option>Todos</option>${S.map(s=>`<option ${filters.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Alerta</label><select id="ventaraOrderFilterAlert"><option>Todos</option><option ${filters.alert==='¡ENTREGAR HOY!'?'selected':''}>¡ENTREGAR HOY!</option><option ${filters.alert==='¡VENCIDO / RETRASADO!'?'selected':''}>¡VENCIDO / RETRASADO!</option><option ${filters.alert==='PROGRAMADO'?'selected':''}>PROGRAMADO</option><option ${filters.alert==='ENTREGADO'?'selected':''}>ENTREGADO</option><option ${filters.alert==='CANCELADO'?'selected':''}>CANCELADO</option><option ${filters.alert==='SIN FECHA'?'selected':''}>SIN FECHA</option></select></div><button type="button" class="btn" id="ventaraClearOrderFilters">Limpiar filtros</button></div>
@@ -54,5 +66,5 @@ function details(o){const items=(o.items||[]).map(x=>`<tr><td>${esc(x.name)}</td
 function mount(){const r=root();if(!r)return false;if(!r.querySelector('.ventara-orders-card'))return render();return true}
 function watch(){let scheduled=false;const tick=()=>{if(!appActive())return;if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;if(!appActive())return;const r=root();if(r&&!r.querySelector('.ventara-orders-card'))render();else removeDuplicateFilter()})};const host=document.getElementById('mainApp');if(!host)return;new MutationObserver(tick).observe(host,{childList:true,subtree:true});tick()}
 window.ventaraOrders={render,openNew:()=>openModal(),setStatus};window.renderOrders=render;window.openOrderModal=()=>openModal();window.setOrderStatus=setStatus;
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',watch,{once:true});else watch();
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installOrdersFilterGuard();watch()},{once:true});else{installOrdersFilterGuard();watch();}
 })();
