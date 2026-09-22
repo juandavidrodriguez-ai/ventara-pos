@@ -2,46 +2,18 @@
 (()=>{'use strict';
 const S=['Pendiente','Entregado','Cancelado'],q=s=>document.querySelector(s),root=()=>q('#orders');
 const appActive=()=>{const login=document.getElementById('loginScreen'),main=document.getElementById('mainApp');return !!main&&main.style.display!=='none'&&(!login||login.style.display==='none')};
-function installOrdersFilterGuard(){
-  const id='ventara-orders-filter-guard';
-  if(!document.getElementById(id)){
-    const style=document.createElement('style');
-    style.id=id;
-    style.textContent=`/* Ocultar la segunda barra redundante de búsqueda en Pedidos */
-#orders .orders-search-container + .orders-search-container,
-#orders div:has(> input[placeholder*="NIT"]),
-#orders #pedidos-container .row:nth-of-type(2) .card-body > div:nth-child(2),
-#orders .orders-filter-container ~ .orders-filter-container,
-#orders #pedidos-view .card-body > div:nth-child(2) .row:nth-child(2) { display:none !important; }
-/* Ocultar únicamente el contenedor de la segunda barra duplicada */
-.pedidos-container .row:nth-of-type(2),
-div:has(> input[placeholder*="NIT o cliente"]) {
-  display: none !important;
-  visibility: hidden !important;
-  height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-}/* Ocultar únicamente la segunda barra de búsqueda duplicada en Pedidos */
-div:has(> input[placeholder*="NIT o cliente"]) {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
+function installOrdersFilterGuard(){/* Sin selectores globales: la duplicada se identifica por su input exacto. */}
+function removeDuplicateFilter(){
+  const r=root(); if(!r)return;
+  r.querySelectorAll('input[placeholder="NIT o cliente"]').forEach(input=>{
+    const box=input.closest('.field');
+    if(box && box!==r && !box.contains(document.getElementById('ventaraOrderFilterText'))){
+      box.style.display='none';
+    }else{
+      input.style.display='none';
+    }
+  });
 }
-`;
-    document.head.appendChild(style);
-  }
-}
-function removeDuplicateFilter(){const r=root();if(!r)return;
-Array.from(r.querySelectorAll('div:has(> input[placeholder*="NIT"])')).forEach(el=>el.remove());
-const selectors=['.orders-search-filter','.filter-bar-container','.orders-filter-bar','.order-filters','.search-filter','.filters-bar'];
-const seen=[];selectors.forEach(sel=>Array.from(r.querySelectorAll(sel)).forEach(el=>{if(!seen.includes(el))seen.push(el)}));
-if(seen.length>1)seen.slice(1).forEach(el=>el.remove());
-Array.from(r.querySelectorAll('label')).filter(x=>x.textContent.trim()==='Buscar').forEach(label=>{const box=label.closest('.field')?.parentElement||label.parentElement?.parentElement;if(box&&box!==r&&!box.querySelector('#ventaraOrderFilterText')&&box.querySelector('select'))box.remove()});
-Array.from(r.querySelectorAll('input[type="search"]')).filter(x=>x.id!=='ventaraOrderFilterText').forEach(input=>{const box=input.closest('.field')?.parentElement||input.parentElement?.parentElement;if(box&&box!==r)box.remove()})}
 const getDb=()=>{try{if(typeof db!=='undefined'&&db&&typeof db==='object')return db}catch(e){}try{if(typeof window.db==='object'&&window.db)return window.db}catch(e){}return null};
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const money=v=>{try{return typeof window.money==='function'?window.money(Number(v)||0):'$ '+Number(v||0).toLocaleString('es-CO')}catch{return '$ '+Number(v||0).toLocaleString('es-CO')}};
