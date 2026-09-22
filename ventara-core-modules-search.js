@@ -6,7 +6,6 @@ const MARK='data-ventara-core-search',EMPTY='data-ventara-core-empty';
 const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const text=el=>{try{return norm(el?.innerText||el?.textContent||'')}catch(e){return ''}};
 const configs=[
- {key:'orders',rootId:'orders',placeholder:'Pedido, factura, referencia, cédula, NIT o cliente',quick:'order-status'},
  {key:'articles',rootId:'products',placeholder:'Código de barras, SKU, nombre, categoría, marca o proveedor',quick:'stock'},
  {key:'purchases',rootId:'purchases',placeholder:'Compra, factura de proveedor, orden, proveedor, NIT o cédula',quick:'date'},
  {key:'credit',rootId:'receivables',placeholder:'Cédula, NIT, cliente, razón social o factura/crédito',quick:'credit-status'}
