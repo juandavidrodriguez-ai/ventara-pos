@@ -65,7 +65,8 @@
         estado:'Pendiente',
         sourcePurchaseId:p.id||null,
         createdAt:new Date().toISOString(),
-        migratedFromPurchase:true
+        migratedFromPurchase:true,
+        supplierBalanceTracked:true
       });
       changed=true;
     });
@@ -174,7 +175,7 @@
       '</div>'+
       '<div class="grid kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px">'+
         '<div class="card kpi"><div class="label">Por pagar</div><div class="value">'+money(t.pending)+'</div><div class="sub">Saldo pendiente total</div></div>'+
-        '<div class="card kpi"><div class="label">Vence pronto</div><div class="value">'+money(d.accountsPayable.filter(r=>pending(r)>0&&r.vencimiento&&String(r.vencimiento)>=today()).reduce((a,r)=>a+pending(r),0))+'</div><div class="sub">Facturas aún abiertas</div></div>'+
+        '<div class="card kpi"><div class="label">Vence pronto</div><div class="value">'+money(d.accountsPayable.filter(r=>pending(r)>0&&r.vencimiento&&String(r.vencimiento)>=today()&&String(r.vencimiento)<=(()=>{const d=new Date();d.setDate(d.getDate()+7);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)})()).reduce((a,r)=>a+pending(r),0))+'</div><div class="sub">Facturas aún abiertas</div></div>'+
         '<div class="card kpi"><div class="label">Vencido</div><div class="value">'+money(t.overdue)+'</div><div class="sub">Saldo con vencimiento pasado</div></div>'+
       '</div>'+
       '<div class="card" data-vap-card>'+
@@ -248,7 +249,9 @@
     if(!fecha)return notify('Indica la fecha de la factura.');
     if(!due)return notify('Indica la fecha de vencimiento.');
     if(total<=0)return notify('El total debe ser mayor que cero.');
-    d.accountsPayable.unshift({id:id('cp'),supplierId,invoice,fecha,vencimiento:due,total,abonado:0,abonos:[],estado:'Pendiente',createdAt:new Date().toISOString(),createdBy:window.currentUser?.id||null});
+    d.accountsPayable.unshift({id:id('cp'),supplierId,invoice,fecha,vencimiento:due,total,abonado:0,abonos:[],estado:'Pendiente',createdAt:new Date().toISOString(),createdBy:window.currentUser?.id||null,supplierBalanceTracked:true});
+    const supplier=suppliers().find(s=>String(s?.id)===String(supplierId));
+    if(supplier)supplier.balance=Number(supplier.balance||0)+total;
     if(!persist())return;
     closeModalSafe();
     renderPayables();
@@ -288,6 +291,8 @@
     if(amount>saldo)return notify('El abono no puede superar el saldo pendiente de '+money(saldo)+'.');
     r.abonos.push({id:id('ab'),fecha:date,importe:amount,metodo:method,createdBy:window.currentUser?.id||null});
     r.abonado=Math.min(r.total,paid(r)+amount);
+    const supplier=suppliers().find(s=>String(s?.id)===String(r.supplierId));
+    if(supplier && r.supplierBalanceTracked!==false)supplier.balance=Math.max(0,Number(supplier.balance||0)-amount);
     r.estado=calcState(r);
     if(!persist())return;
     closeModalSafe();
@@ -301,6 +306,8 @@
     const saldo=pending(r);if(saldo<=0)return;
     if(!confirm('¿Registrar el pago total de '+money(saldo)+' de la factura '+(r.invoice||'')+'?'))return;
     r.abonos.push({id:id('ab'),fecha:today(),importe:saldo,metodo:'Pago total',createdBy:window.currentUser?.id||null});
+    const supplier=suppliers().find(s=>String(s?.id)===String(r.supplierId));
+    if(supplier && r.supplierBalanceTracked!==false)supplier.balance=Math.max(0,Number(supplier.balance||0)-saldo);
     r.abonado=r.total;r.estado='Pagado';
     if(!persist())return;
     renderPayables();
