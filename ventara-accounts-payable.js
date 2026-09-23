@@ -90,22 +90,22 @@
     return r;
   }
 
-  function renderTabs(root,active){
-    const old=root.querySelector('[data-vap-tabs]');
-    if(old)old.remove();
-    const tabs=document.createElement('div');
-    tabs.setAttribute('data-vap-tabs','1');
-    tabs.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px';
-    tabs.innerHTML=
-      '<button type="button" class="btn '+(active==='suppliers'?'primary':'')+'" data-vap-tab="suppliers">Proveedores</button>'+
-      '<button type="button" class="btn '+(active==='payables'?'primary':'')+'" data-vap-tab="payables">Cuentas por pagar</button>';
-    root.prepend(tabs);
-    tabs.querySelectorAll('[data-vap-tab]').forEach(b=>b.addEventListener('click',()=>{
-      const view=b.getAttribute('data-vap-tab');
-      window[TAB_KEY]=view;
-      if(view==='payables')renderPayables();
-      else if(typeof window.renderSuppliers==='function')window.renderSuppliers();
-    }));
+  function renderSupplierPayablesButton(root){
+    if(!root)return;
+    const head=root.querySelector('.head');
+    const actions=head?.querySelector('.actions');
+    if(!actions)return;
+    if(actions.querySelector('[data-vap-open]'))return;
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='btn primary';
+    b.setAttribute('data-vap-open','1');
+    b.textContent='Cuentas por pagar';
+    b.addEventListener('click',()=>{
+      window[TAB_KEY]='payables';
+      renderPayables();
+    });
+    actions.appendChild(b);
   }
 
   function installRenderHook(){
@@ -122,7 +122,7 @@
             if(!root)return;
             const desired=window[TAB_KEY]||'suppliers';
             if(desired==='payables')renderPayables();
-            else renderTabs(root,'suppliers');
+            else renderSupplierPayablesButton(root);
           }catch(e){console.warn('[VENTARA] payables render hook',e)}
         },0);
         return result;
@@ -169,10 +169,7 @@
 
     root.innerHTML=
       '<div class="head"><div><h1>Cuentas por pagar</h1><p>Control de facturas pendientes y abonos a proveedores.</p></div><div class="actions"><button type="button" class="btn primary" data-vap-new>+ Nueva cuenta por pagar</button></div></div>'+
-      '<div data-vap-tabs style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px">'+
-        '<button type="button" class="btn" data-vap-tab="suppliers">Proveedores</button>'+
-        '<button type="button" class="btn primary" data-vap-tab="payables">Cuentas por pagar</button>'+
-      '</div>'+
+
       '<div class="grid kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px">'+
         '<div class="card kpi"><div class="label">Por pagar</div><div class="value">'+money(t.pending)+'</div><div class="sub">Saldo pendiente total</div></div>'+
         '<div class="card kpi"><div class="label">Vence pronto</div><div class="value">'+money(d.accountsPayable.filter(r=>pending(r)>0&&r.vencimiento&&String(r.vencimiento)>=today()&&String(r.vencimiento)<=(()=>{const d=new Date();d.setDate(d.getDate()+7);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)})()).reduce((a,r)=>a+pending(r),0))+'</div><div class="sub">Facturas aún abiertas</div></div>'+
@@ -188,11 +185,15 @@
         (d.accountsPayable.length?'':'<div class="empty">No hay cuentas por pagar registradas.</div>')+
       '</div>';
 
-    root.querySelectorAll('[data-vap-tab]').forEach(b=>b.addEventListener('click',()=>{
-      const view=b.getAttribute('data-vap-tab');window[TAB_KEY]=view;
-      if(view==='suppliers'&&typeof window.renderSuppliers==='function')window.renderSuppliers();
-      else if(view==='payables')renderPayables();
-    }));
+    const back=document.createElement('button');
+    back.type='button';
+    back.className='btn';
+    back.textContent='← Proveedores';
+    back.addEventListener('click',()=>{
+      window[TAB_KEY]='suppliers';
+      if(typeof window.renderSuppliers==='function')window.renderSuppliers();
+    });
+    root.querySelector('.head .actions')?.prepend(back);
     root.querySelector('[data-vap-new]')?.addEventListener('click',openPayableModal);
     root.querySelector('[data-vap-search]')?.addEventListener('input',applyFilters);
     root.querySelector('[data-vap-filter-state]')?.addEventListener('change',applyFilters);
@@ -361,7 +362,7 @@
     installRenderHook();
     if(!window[TAB_KEY])window[TAB_KEY]='suppliers';
     const root=document.getElementById(ROOT_ID);
-    if(root && root.classList.contains('active'))renderTabs(root,window[TAB_KEY]);
+    if(root && root.classList.contains('active') && window[TAB_KEY]==='suppliers')renderSupplierPayablesButton(root);
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,900),{once:true});
