@@ -10,7 +10,7 @@
   const WRAP_KEY='__ventaraPayablesRenderWrapped';
   const STATES=['Pendiente','Abono parcial','Vencido','Pagado'];
 
-  const getDb=()=>{try{return window.db||null}catch(_){return null}};
+  const getDb=()=>{try{if(typeof db!=='undefined'&&db)return db;return window.db||null}catch(_){try{return window.db||null}catch(__){return null}}};
   const notify=(m)=>{try{if(typeof window.toast==='function')window.toast(String(m));else alert(String(m))}catch(_){}};
   const esc=(v)=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   const money=(v)=>{const n=Number(v||0);return '$ '+new Intl.NumberFormat('es-CO',{maximumFractionDigits:0}).format(Number.isFinite(n)?n:0)};
