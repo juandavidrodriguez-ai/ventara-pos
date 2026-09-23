@@ -101,9 +101,17 @@
     b.className='btn primary';
     b.setAttribute('data-vap-open','1');
     b.textContent='Cuentas por pagar';
-    b.addEventListener('click',()=>{
+    b.addEventListener('click',(ev)=>{
+      ev.preventDefault();
+      ev.stopPropagation();
       window[TAB_KEY]='payables';
-      renderPayables();
+      try{
+        if(window.ventaraAccountsPayable?.render) window.ventaraAccountsPayable.render();
+        else renderPayables();
+      }catch(e){
+        console.error('[VENTARA] Error al abrir Cuentas por pagar',e);
+        notify('No se pudo abrir Cuentas por pagar. Revisa la consola.');
+      }
     });
     actions.appendChild(b);
   }
