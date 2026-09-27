@@ -131,10 +131,31 @@
   }catch(e){console.warn('[VENTARA] inject button',e);return false}}
 
   function showAlerts(){try{
-    const rows=products().filter(p=>{const stock=Number(p?.stock??p?.stockActual??0),min=Number(p?.min??p?.stockMin);return Number.isFinite(stock)&&Number.isFinite(min)&&min>0&&stock<=min});
-    const body=rows.length?rows.map(p=>{const name=String(p?.name||p?.description||'Producto sin nombre');const currentSupplier=supplierName(p?.supplierId);const supplier=currentSupplier&&currentSupplier!=='Sin Proveedor'?currentSupplier:String(p?.supplierName||'Sin Proveedor');return '<tr><td>'+esc(name)+'</td><td>'+esc(supplier)+'</td></tr>'}).join(''):'<tr><td colspan="2" class="empty">No hay alertas de stock pendiente.</td></tr>';
-    const html='<h2>Alertas de Stock</h2><div class="card" style="box-shadow:none;background:#f8fafc"><table class="table"><thead><tr><th>Producto</th><th>Proveedor</th></tr></thead><tbody>'+body+'</tbody></table></div><div class="actions" style="margin-top:15px"><button class="btn" type="button" onclick="window.closeModal()">Cerrar</button></div>';
-    if(typeof W.openModal==='function')W.openModal(html);else alert(rows.length?rows.map(p=>`${p?.name||'Producto'} — ${p?.supplierName||supplierName(p?.supplierId)} — actual: ${p?.stockActual??p?.stock??0} — mínimo: ${p?.stockMin??p?.min??0} — sugerido: ${Math.max(0,Number(p?.stockMax??0)-Number(p?.stockActual??p?.stock??0))}`).join('\n'):'No hay alertas de stock pendiente.');
+    const rows=products().filter(p=>{
+      const stock=Number(p?.stock??p?.stockActual??0);
+      const min=Number(p?.min??p?.stockMin);
+      return Number.isFinite(stock)&&Number.isFinite(min)&&min>0&&stock<=min;
+    }).map(p=>{
+      const stock=Number(p?.stock??p?.stockActual??0);
+      const min=Number(p?.min??p?.stockMin??0);
+      const max=Number(p?.stockMax??0);
+      const replenish=Math.max(0,max-stock);
+      const status=stock<=0?'Crítico':'Bajo';
+      const currentSupplier=supplierName(p?.supplierId);
+      const supplier=currentSupplier&&currentSupplier!=='Sin Proveedor'?currentSupplier:String(p?.supplierName||'Sin Proveedor');
+      return {p,stock,min,max,replenish,status,supplier};
+    });
+    const critical=rows.filter(x=>x.stock<=0).length;
+    const low=Math.max(0,rows.length-critical);
+    const summary=rows.length
+      ? '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 15px"><span class="badge" style="padding:7px 10px">🔔 '+rows.length+' producto'+(rows.length===1?' requiere':'s requieren')+' reposición</span><span class="badge" style="padding:7px 10px">🔴 '+critical+' crítico'+(critical===1?'':'s')+'</span><span class="badge" style="padding:7px 10px">🟡 '+low+' bajo'+(low===1?'':'s')+'</span></div>'
+      : '<div class="empty" style="padding:15px">No hay alertas de stock pendiente.</div>';
+    const body=rows.length?rows.map(x=>{
+      const name=String(x.p?.name||x.p?.description||'Producto sin nombre');
+      return '<tr><td>'+esc(name)+'</td><td>'+esc(x.supplier)+'</td><td style="text-align:center;font-weight:600">'+esc(x.stock)+'</td><td style="text-align:center">'+esc(x.min)+'</td><td style="text-align:center">'+esc(x.max>0?x.max:'—')+'</td><td style="text-align:center;font-weight:700">'+esc(x.max>0?x.replenish:'—')+'</td><td><span class="badge">'+esc(x.status)+'</span></td></tr>';
+    }).join(''):'<tr><td colspan="7" class="empty">No hay alertas de stock pendiente.</td></tr>';
+    const html='<h2>Alertas de Stock</h2>'+summary+'<div class="card" style="box-shadow:none;background:#f8fafc;overflow-x:auto"><table class="table"><thead><tr><th>Producto</th><th>Proveedor</th><th>Stock actual</th><th>Mínimo</th><th>Máximo</th><th>Reponer</th><th>Estado</th></tr></thead><tbody>'+body+'</tbody></table></div><div class="actions" style="margin-top:15px"><button class="btn" type="button" onclick="window.closeModal()">Cerrar</button></div>';
+    if(typeof W.openModal==='function')W.openModal(html);else alert(rows.length?rows.map(x=>`${x.p?.name||'Producto'} — ${x.supplier} — actual: ${x.stock} — mínimo: ${x.min} — máximo: ${x.max||'—'} — reponer: ${x.max>0?x.replenish:'—'} — ${x.status}`).join('\n'):'No hay alertas de stock pendiente.');
   }catch(e){console.warn('[VENTARA] show alerts',e)}}
 
   function bindProductActionButtons(){try{
