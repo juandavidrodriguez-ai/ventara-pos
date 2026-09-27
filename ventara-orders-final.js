@@ -118,10 +118,30 @@ function ventaraAbonoDateTime(){
 function ventaraAbonoRef(s){
   return String(s?.number||s?.invoiceNumber||s?.factura||s?.reference||s?.referencia||s?.id||'').trim();
 }
-function ventaraAbonoHistoryHtml(c){
-  const h=Array.isArray(c?.historialAbonos)?c.historialAbonos:[];
-  if(!h.length)return '<tr><td colspan="4" class="empty">Aún no hay abonos registrados.</td></tr>';
-  return h.slice().reverse().map(a=>'<tr><td>'+esc(a.fecha||'—')+'</td><td>'+money(a.valorAbono||0)+'</td><td>'+money(a.saldoRestante||0)+'</td><td>'+esc(a.facturaRef||'—')+'</td></tr>').join('');
+function ventaraAbonoHistory(c){
+  const own=Array.isArray(c?.historialAbonos)?c.historialAbonos:[];
+  const payments=Array.isArray(window.db?.payments)?window.db.payments:[];
+  const fromPayments=payments.filter(p=>String(p?.clientId)===String(c?.id)&&(String(p?.method||'').toLowerCase()==='abono'||Number(p?.value)>0&&String(p?.type||'').toLowerCase().includes('abono'))).map(p=>({
+    fecha:String(p?.date||'')+(p?.time?' '+String(p.time):''),
+    facturaRef:String(p?.facturaRef||p?.reference||p?.referencia||'').trim(),
+    valorAbono:Number(p?.value)||0,
+    saldoRestante:Number.isFinite(Number(p?.saldoRestante))?Number(p.saldoRestante):null,
+    saldoAnterior:Number.isFinite(Number(p?.saldoAnterior))?Number(p.saldoAnterior):null,
+    _source:'payment',
+    _id:String(p?.id||'')
+  }));
+  const merged=[...own.map(a=>({...a,_source:'history'})),...fromPayments];
+  const seen=new Set(),h=merged.filter(a=>{
+    const key=[a._id,a.fecha,a.valorAbono,a.facturaRef,a.saldoRestante].join('|');
+    if(seen.has(key))return false;seen.add(key);return true;
+  }).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||'')));
+  let running=Number(c?.balance)||0;
+  const rows=h.map(a=>{
+    const saldo=a.saldoRestante==null?running:a.saldoRestante;
+    if(a.saldoRestante==null)running+=Number(a.valorAbono)||0;
+    return '<tr><td>'+esc(a.fecha||'—')+'</td><td>'+money(a.valorAbono||0)+'</td><td>'+money(saldo)+'</td><td>'+esc(a.facturaRef||'—')+'</td></tr>';
+  });
+  return rows.length?rows.join(''):'<tr><td colspan="4" class="empty">Aún no hay abonos registrados.</td></tr>';
 }
 function ventaraPrintAbono(data){
   const old=document.getElementById('ventaraAbonoTicket');if(old)old.remove();
