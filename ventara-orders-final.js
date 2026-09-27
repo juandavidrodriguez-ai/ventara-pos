@@ -177,36 +177,5 @@ window.savePayment=function(){
   }
 };
 
-/* ATANQUE GLOBAL DEL EVENTO ABONAR — bloque aislado solicitado. */
-document.addEventListener('click', function (e) {
-    const target = e.target.closest('button, a');
-    if (!target) return;
-    
-    const textoBtn = target.textContent.trim().toLowerCase();
-    if (textoBtn.includes('abonar')) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const fila = target.closest('tr');
-        const nombreCliente = fila ? fila.cells[0].textContent.trim() : 'Cliente';
-        const saldoActual = fila ? fila.cells[2].textContent.trim() : '$0';
-
-        const abonoIngresado = prompt(`--- REGISTRO DE ABONO A CRÉDITO ---\nCliente: ${nombreCliente}\nSaldo Actual: ${saldoActual}\n\nIngrese el monto a abonar ($):`);
-
-        if (abonoIngresado !== null && abonoIngresado.trim() !== '' && !isNaN(abonoIngresado)) {
-            const monto = parseFloat(abonoIngresado);
-            if (monto <= 0) {
-                alert("El monto ingresado debe ser mayor a 0.");
-                return;
-            }
-
-            const fechaHora = new Date().toLocaleString('es-CO');
-            alert(`✅ ABONO REGISTRADO EXITOSAMENTE\n\n• Cliente: ${nombreCliente}\n• Fecha / Hora: ${fechaHora}\n• Monto Abonado: ${monto.toLocaleString()}\n\nComprobante listo para generación.`);
-            
-            // Actualizar vista / recargar saldo si aplica
-            if (typeof renderCreditClients === 'function') renderCreditClients();
-        }
-    }
-});
 
 })();
