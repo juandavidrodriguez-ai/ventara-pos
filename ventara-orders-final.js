@@ -119,11 +119,22 @@ document.addEventListener('click',function(event){
   event.preventDefault();
   event.stopImmediatePropagation();
   const cells=row.querySelectorAll('td');
-  const name=String(cells[0]?.innerText||'Cliente').split('\n')[0].trim();
-  const clients=Array.isArray(window.db?.clients)?window.db.clients:[];
-  const client=clients.find(c=>String(c?.name||'').trim()===name);
+  let clientId='';
+  let nombreCliente='';
+  let saldoActual='$0';
+  const inline=String(btn.getAttribute('onclick')||'');
+  const idMatch=inline.match(/openPaymentModal\\(['"]([^'"]+)['"]\\)/);
+  if(idMatch)clientId=idMatch[1];
+  if(cells.length>0)nombreCliente=String(cells[0].textContent||'').trim().split('\\n')[0].trim();
+  if(cells.length>=3)saldoActual=String(cells[2].textContent||'').trim()||'$0';
+  let clients=[];
+  try{if(typeof db!=='undefined'&&Array.isArray(db?.clients))clients=db.clients}catch(_){}
+  if(!clients.length&&Array.isArray(window.db?.clients))clients=window.db.clients;
+  let client=clientId?clients.find(c=>String(c?.id)===String(clientId)):null;
+  if(!client&&nombreCliente)client=clients.find(c=>String(c?.name||'').trim()===nombreCliente);
   if(!client){alert('No se pudo identificar el cliente.');return;}
   if(typeof window.openPaymentModal!=='function'){alert('El formulario de abono no está disponible.');return;}
+  window.__ventaraAbonoRowSaldo=saldoActual;
   window.openPaymentModal(client.id);
 },true);
 
