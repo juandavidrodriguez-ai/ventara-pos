@@ -108,3 +108,95 @@ function installCreditPaymentGuard(){
 }
 installCreditPaymentGuard();
 })();
+
+/* VENTARA — Historial quirúrgico de abonos.
+   Aislado en este archivo activo. No toca index.html ni el flujo inicial de venta a crédito. */
+const ventaraAbonoMoney=v=>{try{return typeof window.money==='function'?window.money(Number(v)||0):'$ '+Number(v||0).toLocaleString('es-CO')}catch(e){return '$ '+Number(v||0).toLocaleString('es-CO')}};
+const ventaraAbonoDate=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+const ventaraAbonoEsc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const ventaraAbonoSales=clientId=>(Array.isArray(window.db?.sales)?window.db.sales:[]).filter(s=>String(s?.clientId)===String(clientId)&&String(s?.method||'').toLowerCase()==='crédito');
+const ventaraAbonoRef=s=>String(s?.number||s?.invoiceNumber||s?.factura||s?.reference||s?.referencia||s?.id||'').trim();
+const ventaraAbonoHistory=clientId=>{const c=window.db?.clients?.find(x=>String(x?.id)===String(clientId));return Array.isArray(c?.historialAbonos)?c.historialAbonos:[]};
+
+window.openAbonoHistory=function(clientId){
+  const c=window.db?.clients?.find(x=>String(x?.id)===String(clientId)); if(!c)return;
+  const rows=ventaraAbonoHistory(clientId).slice().reverse().map(a=>'<tr><td>'+ventaraAbonoEsc(a.fecha||'—')+'</td><td>'+ventaraAbonoEsc(a.facturaRef||'—')+'</td><td>'+ventaraAbonoMoney(a.valorAbono)+'</td><td>'+ventaraAbonoMoney(a.saldoRestante)+'</td></tr>').join('');
+  const html='<div class="head" style="margin-bottom:12px"><div><h2>Historial de abonos</h2><p class="muted">'+ventaraAbonoEsc(c.name||'Cliente')+'</p></div><button class="btn" type="button" onclick="closeModal()">Cerrar</button></div>'+
+    '<div class="tablewrap"><table class="table"><thead><tr><th>FECHA Y HORA</th><th>FACTURA / REF</th><th>VALOR ABONADO</th><th>SALDO RESTANTE</th></tr></thead><tbody>'+
+    (rows||'<tr><td colspan="4" class="empty">Aún no hay abonos registrados.</td></tr>')+
+    '</tbody></table></div>';
+  if(typeof window.openModal==='function')window.openModal(html);
+};
+
+window.printAbonoReceipt=function(data){
+  const old=document.getElementById('ventaraAbonoPrintOverlay'); if(old)old.remove();
+  const e=document.createElement('div'); e.id='ventaraAbonoPrintOverlay';
+  e.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:100001;padding:20px';
+  e.innerHTML='<div id="ventaraAbonoPrintArea" class="card" style="background:#fff;width:min(420px,95vw);padding:24px;box-shadow:0 10px 35px rgba(0,0,0,.2)">'+
+    '<div style="text-align:center"><h2 style="margin:0">COMPROBANTE DE ABONO</h2><p style="margin:6px 0 18px">VENTARA POS</p></div>'+
+    '<div style="line-height:1.8"><div><b>Cliente:</b> '+ventaraAbonoEsc(data.clientName)+'</div><div><b>Fecha y Hora:</b> '+ventaraAbonoEsc(data.fecha)+'</div><div><b>Factura / Referencia No.:</b> '+ventaraAbonoEsc(data.facturaRef||'—')+'</div><div><b>Valor Abonado:</b> '+ventaraAbonoMoney(data.valorAbono)+'</div><div><b>Saldo Restante a Deber:</b> '+ventaraAbonoMoney(data.saldoRestante)+'</div></div>'+
+    '<div class="actions" style="justify-content:flex-end;margin-top:20px"><button class="btn" type="button" id="ventaraAbonoPrintClose">Cerrar</button><button class="btn primary" type="button" id="ventaraAbonoPrintNow">🖨 Imprimir</button></div></div>';
+  document.body.appendChild(e);
+  e.querySelector('#ventaraAbonoPrintClose').onclick=()=>e.remove();
+  e.querySelector('#ventaraAbonoPrintNow').onclick=()=>window.print();
+  const st=document.createElement('style'); st.id='ventaraAbonoPrintStyle'; st.textContent='@media print{body>*{display:none!important}#ventaraAbonoPrintOverlay{display:flex!important;position:static!important;background:#fff!important;padding:0!important}#ventaraAbonoPrintArea{display:block!important;width:100%!important;max-width:420px!important;box-shadow:none!important;border:0!important}#ventaraAbonoPrintArea .actions{display:none!important}}'; document.head.appendChild(st);
+  const cleanup=()=>{document.getElementById('ventaraAbonoPrintStyle')?.remove();document.getElementById('ventaraAbonoPrintOverlay')?.remove();window.removeEventListener('afterprint',cleanup)};
+  window.addEventListener('afterprint',cleanup);
+};
+
+window.openPaymentModal=function(id=''){
+  const clients=Array.isArray(window.db?.clients)?window.db.clients.filter(c=>Number(c?.balance)>0):[];
+  const c=clients.find(x=>String(x.id)===String(id))||clients[0]; if(!c)return typeof window.toast==='function'?window.toast('No hay clientes con saldo pendiente.') : null;
+  const sales=ventaraAbonoSales(c.id);
+  const opts=sales.map(s=>'<option value="'+ventaraAbonoEsc(ventaraAbonoRef(s))+'">'+ventaraAbonoEsc(ventaraAbonoRef(s)||'Sin referencia')+' · '+ventaraAbonoEsc(s.date||'')+'</option>').join('');
+  const html='<h2>Registrar abono</h2><div class="form"><div class="field"><label>Cliente</label><select id="pay_client">'+clients.map(x=>'<option value="'+ventaraAbonoEsc(x.id)+'" '+(String(x.id)===String(c.id)?'selected':'')+'>'+ventaraAbonoEsc(x.name)+' · '+ventaraAbonoMoney(x.balance)+'</option>').join('')+'</select></div><div class="field"><label>Valor</label><input id="pay_value" type="number" min="1" step="0.01"></div><div class="field"><label>Método</label><select id="pay_method"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div><div class="field"><label>Factura / Referencia</label><select id="pay_invoice"><option value="">— Sin referencia específica —</option>'+opts+'</select></div></div><div class="actions" style="margin-top:15px"><button class="btn" type="button" onclick="openAbonoHistory(document.getElementById(\'pay_client\').value)">Ver historial</button><button class="btn primary" type="button" onclick="savePayment()">Registrar abono</button></div>';
+  if(typeof window.openModal==='function')window.openModal(html);
+};
+
+window.savePayment=async function(){
+  try{
+    const clientId=typeof window.v==='function'?window.v('pay_client'):document.getElementById('pay_client')?.value;
+    const c=window.db?.clients?.find(x=>String(x?.id)===String(clientId));
+    if(!c)return typeof window.toast==='function'?window.toast('Selecciona un cliente.') : null;
+    const raw=Number(document.getElementById('pay_value')?.value||0);
+    if(!Number.isFinite(raw)||raw<=0)return typeof window.toast==='function'?window.toast('Ingresa un valor de abono válido.') : null;
+    const saldoAnterior=Math.max(0,Number(c.balance)||0);
+    if(saldoAnterior<=0)return typeof window.toast==='function'?window.toast('El cliente no tiene saldo pendiente.') : null;
+    const valorAbono=Math.min(raw,saldoAnterior);
+    const saldoRestante=Math.max(0,saldoAnterior-valorAbono);
+    const fecha=ventaraAbonoDate();
+    const facturaRef=String(document.getElementById('pay_invoice')?.value||'').trim();
+    const method=String(document.getElementById('pay_method')?.value||'Efectivo');
+    c.balance=saldoRestante;
+    c.historialAbonos=Array.isArray(c.historialAbonos)?c.historialAbonos:[];
+    c.historialAbonos.push({fecha,facturaRef,valorAbono,saldoAnterior,saldoRestante});
+    window.db.payments=Array.isArray(window.db.payments)?window.db.payments:[];
+    window.db.payments.unshift({id:typeof window.uid==='function'?window.uid('pa'):'pa-'+Date.now(),date:fecha.split(' ')[0],time:fecha.split(' ')[1],clientId:c.id,value:valorAbono,method,facturaRef,saldoAnterior,saldoRestante});
+    if(window.db.cash)window.db.cash.balance=(Number(window.db.cash.balance)||0)+valorAbono;
+    if(typeof window.log==='function')window.log('Abono de cartera',c.name);
+    try{localStorage.setItem('ventara_pos_v1',JSON.stringify(window.db))}catch(e){}
+    if(typeof window.save==='function')await window.save();else if(typeof window.cloudSave==='function')await window.cloudSave();
+    if(typeof window.closeModal==='function')window.closeModal();
+    if(typeof window.renderReceivables==='function')window.renderReceivables();
+    if(typeof window.toast==='function')window.toast('Abono registrado correctamente.');
+    window.printAbonoReceipt({clientName:c.name||'Cliente',fecha,facturaRef,valorAbono,saldoRestante});
+  }catch(err){
+    console.error('[VENTARA] registro de abono:',err);
+    if(typeof window.toast==='function')window.toast('No se pudo registrar el abono: '+(err?.message||String(err)));
+  }
+};
+
+window.renderReceivables=function(){
+  const dbx=window.db;if(!dbx)return;
+  const debtors=(Array.isArray(dbx.clients)?dbx.clients:[]).filter(c=>Number(c?.balance)>0);
+  const total=debtors.reduce((a,c)=>a+(Number(c.balance)||0),0);
+  const rows=(Array.isArray(dbx.clients)?dbx.clients:[]).filter(c=>c.creditEnabled||Number(c?.balance)>0).map(c=>{
+    const hist=Array.isArray(c.historialAbonos)?c.historialAbonos:[];
+    const last=hist.length?hist[hist.length-1]:null;
+    return '<tr><td><b>'+ventaraAbonoEsc(c.name)+'</b><br><small class="muted">'+ventaraAbonoEsc(c.doc||'')+'</small></td><td>'+ventaraAbonoMoney(c.credit)+'</td><td>'+ventaraAbonoMoney(c.balance)+'</td><td>'+ventaraAbonoMoney(Math.max(0,(Number(c.credit)||0)-(Number(c.balance)||0)))+'</td><td>'+(c.creditDays??0)+' días</td><td>'+(last?'<small class="muted">Último: '+ventaraAbonoEsc(last.fecha)+' · '+ventaraAbonoMoney(last.valorAbono)+'</small><br>':'')+'<button class="btn sm" onclick="openPaymentModal(\''+ventaraAbonoEsc(c.id)+'\')">Abonar</button> <button class="btn sm" onclick="openClientModal(\''+ventaraAbonoEsc(c.id)+'\')">Editar</button> <button class="btn sm" onclick="openCreditInvoices(\''+ventaraAbonoEsc(c.id)+'\')">Facturas</button> <button class="btn sm" onclick="openAbonoHistory(\''+ventaraAbonoEsc(c.id)+'\')">Historial</button> <button class="btn sm danger" onclick="deleteCreditLine(\''+ventaraAbonoEsc(c.id)+'\')">Eliminar</button></td></tr>';
+  }).join('');
+  const el=document.getElementById('receivables');if(!el)return;
+  const head=typeof window.pageHead==='function'?window.pageHead('Fiados / Crédito','La libreta de fiados digital de VENTARA', '<button class="btn primary" onclick="openClientModal()">+ Nueva línea de crédito</button><button class="btn" onclick="exportCreditReport()">Exportar cartera</button>'):'<h1>Fiados / Crédito</h1>';
+  const table=typeof window.table==='function'?window.table(['Cliente','Límite','Saldo','Disponible','Plazo','Acción'],rows,'No hay líneas de crédito configuradas'):'<table class="table"><tbody>'+rows+'</tbody></table>';
+  el.innerHTML=head+'<div class="grid cols3"><div class="card kpi"><div class="label">Total fiado</div><div class="value">'+ventaraAbonoMoney(total)+'</div></div><div class="card kpi"><div class="label">Clientes con saldo</div><div class="value">'+debtors.length+'</div></div><div class="card kpi"><div class="label">Líneas habilitadas</div><div class="value">'+(Array.isArray(dbx.clients)?dbx.clients.filter(c=>c.creditEnabled).length:0)+'</div></div></div><div class="card" style="margin-top:16px">'+table+'</div>';
+};
