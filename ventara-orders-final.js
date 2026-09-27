@@ -144,7 +144,8 @@ window.openPaymentModal=function(id=''){
     '<div class="form"><div class="field"><label>Cliente</label><select id="pay_client">'+clients.map(x=>'<option value="'+esc(x.id)+'" '+(String(x.id)===String(c.id)?'selected':'')+'>'+esc(x.name)+' · '+money(x.balance)+'</option>').join('')+'</select></div><div class="field"><label>Valor del abono</label><input id="pay_value" type="number" min="1" step="0.01" placeholder="Ingrese el monto"></div><div class="field"><label>Factura / Referencia de la venta</label><select id="pay_invoice"><option value="">— Seleccionar referencia —</option>'+saleOptions+'</select></div></div>'+
     '<div class="card" style="margin-top:16px"><h3 style="margin-top:0">HISTORIAL DE ABONOS DE ESTE CLIENTE</h3><div class="tablewrap"><table class="table"><thead><tr><th>FECHA Y HORA</th><th>VALOR ABONADO</th><th>SALDO RESTANTE</th><th>FACTURA / REF</th></tr></thead><tbody>'+ventaraAbonoHistoryHtml(c)+'</tbody></table></div></div>'+
     '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button class="btn" type="button" onclick="closeModal()">Cancelar</button><button class="btn success" type="button" onclick="savePayment()">Registrar abono</button></div>';
-  openModal(html);
+  if(typeof window.openModal!=='function')return toast('No se pudo abrir el modal de abono.');
+  window.openModal(html);
 };
 window.savePayment=function(){
   try{
