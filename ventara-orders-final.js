@@ -108,65 +108,64 @@ function installCreditPaymentGuard(){
 }
 installCreditPaymentGuard();
 
-/* Abonos: único flujo delegado y persistente. */
-document.addEventListener('click',function(event){
-  const btn=event.target.closest?.('button, a, input[type="button"]');
-  if(!btn)return;
-  const text=String(btn.textContent||btn.value||'').trim().toLowerCase();
-  if(text!=='abonar'&&!btn.classList.contains('btn-abonar'))return;
-  const row=btn.closest('tr');
-  if(!row)return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  const cells=row.querySelectorAll('td');
-  let clientId='';
-  let nombreCliente='';
-  let saldoActual='$0';
-  const inline=String(btn.getAttribute('onclick')||'');
-  const idMatch=inline.match(/openPaymentModal\\(['"]([^'"]+)['"]\\)/);
-  if(idMatch)clientId=idMatch[1];
-  if(cells.length>0)nombreCliente=String(cells[0].textContent||'').trim().split('\\n')[0].trim();
-  if(cells.length>=3)saldoActual=String(cells[2].textContent||'').trim()||'$0';
-  let clients=[];
-  try{if(typeof db!=='undefined'&&Array.isArray(db?.clients))clients=db.clients}catch(_){}
-  if(!clients.length&&Array.isArray(window.db?.clients))clients=window.db.clients;
-  let client=clientId?clients.find(c=>String(c?.id)===String(clientId)):null;
-  if(!client&&nombreCliente)client=clients.find(c=>String(c?.name||'').trim()===nombreCliente);
-  if(!client){alert('No se pudo identificar el cliente.');return;}
-  if(typeof window.openPaymentModal!=='function'){alert('El formulario de abono no está disponible.');return;}
-  window.__ventaraAbonoRowSaldo=saldoActual;
-  window.openPaymentModal(client.id);
-},true);
+/* Abonos: flujo delegado basado directamente en el texto visible de la fila. */
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('button, a, input');
+  if (!btn) return;
 
-window.openPaymentModal=function(id){
-  const client=window.db?.clients?.find(c=>String(c?.id)===String(id));
-  if(!client){alert('No se encontró el cliente.');return;}
-  window.__ventaraAbonoClientId=client.id;
-  const payments=Array.isArray(window.db?.payments)?window.db.payments:[];
-  const own=Array.isArray(client.historialAbonos)?client.historialAbonos:[];
-  const history=[...own.map(a=>a),...payments.filter(p=>String(p?.clientId)===String(client.id)&&String(p?.method||'').toLowerCase()==='abono').map(p=>({fecha:String(p.date||'')+(p.time?' '+p.time:''),valorAbono:Number(p.value)||0,saldoRestante:Number(p.saldoRestante),facturaRef:p.facturaRef||p.reference||p.referencia||''}))];
-  const seen=new Set();
-  const rows=history.filter(a=>{const k=[a.fecha,a.valorAbono,a.saldoRestante,a.facturaRef].join('|');if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||''))).map(a=>'<tr><td>'+esc(a.fecha||'—')+'</td><td>'+money(a.valorAbono||0)+'</td><td>'+money(Number.isFinite(a.saldoRestante)?a.saldoRestante:0)+'</td><td>'+esc(a.facturaRef||'—')+'</td></tr>').join('')||'<tr><td colspan="4" class="empty">Aún no hay abonos registrados.</td></tr>';
-  const html='<h2>Registrar abono</h2><p class="muted">'+esc(client.name||'Cliente')+' · Saldo pendiente: <b>'+money(client.balance)+'</b></p><div class="form"><div class="field"><label>Valor del abono</label><input id="pay_value" type="number" min="1" step="0.01"></div><div class="field"><label>Factura / Referencia</label><input id="pay_invoice" type="text" placeholder="Opcional"></div></div><div class="card" style="margin-top:16px"><h3>HISTORIAL DE ABONOS</h3><div class="tablewrap"><table class="table"><thead><tr><th>FECHA Y HORA</th><th>VALOR ABONADO</th><th>SALDO RESTANTE</th><th>FACTURA / REF</th></tr></thead><tbody>'+rows+'</tbody></table></div></div><div class="actions" style="justify-content:flex-end;margin-top:16px"><button class="btn" type="button" onclick="closeModal()">Cancelar</button><button class="btn success" type="button" onclick="savePayment()">Registrar abono</button></div>';
-  if(typeof window.openModal!=='function'){alert('No se pudo abrir el modal.');return;}
-  window.openModal(html);
-};
-window.savePayment=function(){
-  const client=window.db?.clients?.find(c=>String(c?.id)===String(window.__ventaraAbonoClientId));
-  const value=Number(document.getElementById('pay_value')?.value||0);
-  if(!client||!Number.isFinite(value)||value<=0){alert('Ingresa un valor de abono válido.');return;}
-  const before=Number(client.balance)||0;
-  if(value>before){alert('El abono no puede superar el saldo pendiente.');return;}
-  const d=new Date(),fecha=d.toLocaleString('es-CO',{dateStyle:'short',timeStyle:'medium'}),after=before-value,ref=String(document.getElementById('pay_invoice')?.value||'').trim();
-  client.balance=after;
-  client.historialAbonos=Array.isArray(client.historialAbonos)?client.historialAbonos:[];
-  client.historialAbonos.push({fecha,valorAbono:value,saldoAnterior:before,saldoRestante:after,facturaRef:ref});
-  window.db.payments=Array.isArray(window.db.payments)?window.db.payments:[];
-  window.db.payments.unshift({id:'pa-'+Date.now(),date:fecha,clientId:client.id,value,method:'Abono',facturaRef:ref,saldoAnterior:before,saldoRestante:after});
-  if(typeof window.save==='function')window.save();
-  if(typeof window.closeModal==='function')window.closeModal();
-  if(typeof window.renderReceivables==='function')window.renderReceivables();
-  alert('ABONO REGISTRADO\n\nCliente: '+client.name+'\nFecha / Hora: '+fecha+'\nValor: '+money(value)+'\nSaldo restante: '+money(after));
-};
+  const txt = (btn.textContent || btn.value || '').trim().toLowerCase();
+  if (txt !== 'abonar' && !btn.classList.contains('btn-abonar')) return;
 
+  e.preventDefault();
+  e.stopPropagation();
+
+  const fila = btn.closest('tr');
+  let nombreCliente = '';
+  let saldoActual = '$0';
+
+  if (fila) {
+    const celdas = fila.querySelectorAll('td');
+    if (celdas.length > 0) nombreCliente = celdas[0].textContent.trim();
+    if (celdas.length >= 3) saldoActual = celdas[2].textContent.trim();
+  }
+
+  if (!nombreCliente || nombreCliente === 'CLIENTE') {
+    nombreCliente = btn.getAttribute('data-cliente') || btn.getAttribute('data-name') || prompt("Ingrese o confirme el nombre del cliente:");
+  }
+
+  if (nombreCliente) {
+    const abonoInput = prompt(`--- REGISTRO DE ABONO A CRÉDITO ---\nCliente: ${nombreCliente}\nSaldo Pendiente: ${saldoActual}\n\nIngrese el valor abonado ($):`);
+
+    if (abonoInput && !isNaN(parseFloat(abonoInput.replace(/[^0-9.]/g, '')))) {
+      const monto = parseFloat(abonoInput.replace(/[^0-9.]/g, ''));
+      if (monto <= 0) {
+        alert('El monto ingresado debe ser mayor a $0.');
+        return;
+      }
+
+      const refFactura = prompt('Ingrese el # de Factura / Remisión asociada (Opcional):', `FAC-${Math.floor(1000 + Math.random() * 9000)}`) || 'S/N';
+      const fechaHora = new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'medium' });
+
+      const saldoNum = parseFloat(saldoActual.replace(/[^0-9.]/g, '')) || 0;
+      const nuevoSaldo = Math.max(0, saldoNum - monto);
+
+      alert(`========================================\n` +
+            `       COMPROBANTE DE ABONO A CRÉDITO    \n` +
+            `========================================\n` +
+            `Cliente: ${nombreCliente}\n` +
+            `Fecha y Hora: ${fechaHora}\n` +
+            `Factura / Ref: ${refFactura}\n` +
+            `----------------------------------------\n` +
+            `Saldo Anterior: ${saldoActual}\n` +
+            `VALOR ABONADO: $${monto.toLocaleString('es-CO')}\n` +
+            `NUEVO SALDO RESTANTE: $${nuevoSaldo.toLocaleString('es-CO')}\n` +
+            `========================================`);
+
+      if (fila) {
+        const celdas = fila.querySelectorAll('td');
+        if (celdas[2]) celdas[2].textContent = `$ ${nuevoSaldo.toLocaleString('es-CO')}`;
+      }
+    }
+  }
+});
 })();
