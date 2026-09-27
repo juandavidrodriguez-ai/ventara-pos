@@ -108,56 +108,179 @@ function installCreditPaymentGuard(){
 }
 installCreditPaymentGuard();
 
-/* Abonos: flujo directo desde la fila visible, sin validación bloqueante de cliente. */
-document.addEventListener('click', function (e) {
-    const btn = e.target.closest('button, a, input');
-    if (!btn) return;
-    
-    const txt = (btn.textContent || btn.value || '').trim().toLowerCase();
-    if (txt !== 'abonar' && !btn.classList.contains('btn-abonar')) return;
+/* Abonos: saldo real, historial consultable y flujo aislado de cartera. */
+const ventaraAbonoNumber = value => {
+  const s = String(value ?? '');
+  const cleaned = s.replace(/[^0-9,-]/g, '');
+  if (!cleaned) return 0;
+  if (cleaned.includes(',')) {
+    const parts = cleaned.split(',');
+    if (parts.length === 2 && parts[1].length <= 2) return Number(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+  return Number(cleaned.replace(/[.,]/g, '')) || 0;
+};
 
-    e.preventDefault();
-    e.stopPropagation();
+function ventaraAbonoClientByRow(fila){
+  const d=getDb();
+  const cells=fila?.querySelectorAll?.('td');
+  const visibleName=String(cells?.[0]?.textContent||'').trim().split(/\s*\n\s*/)[0].trim();
+  const clients=Array.isArray(d?.clients)?d.clients:[];
+  return {
+    client: clients.find(c=>String(c?.name||'').trim()===visibleName) || null,
+    name: visibleName || 'Cliente',
+    balanceText: String(cells?.[2]?.textContent||'$0').trim(),
+    cells
+  };
+}
 
-    // Extraer el nombre directamente del texto HTML de la celda
-    const fila = btn.closest('tr');
-    let nombreCliente = 'Cliente';
-    let saldoActual = '$0';
+function ventaraAbonoHistory(client){
+  const d=getDb();
+  const payments=Array.isArray(d?.payments)?d.payments:[];
+  return payments
+    .filter(p=>String(p?.clientId||'')===String(client?.id||'') && (p?.type==='abono_cartera' || p?.category==='Abono de cartera' || p?.isCreditPayment===true))
+    .sort((a,b)=>String(b?.dateTime||b?.date||'').localeCompare(String(a?.dateTime||a?.date||'')));
+}
 
-    if (fila) {
-        const celdas = fila.querySelectorAll('td');
-        if (celdas.length > 0) nombreCliente = celdas[0].textContent.trim();
-        if (celdas.length >= 3) saldoActual = celdas[2].textContent.trim();
-    }
+function ventaraMostrarConsulta(client){
+  if(!client)return;
+  const history=ventaraAbonoHistory(client);
+  const initial=history.length
+    ? history.reduce((max,p)=>Math.max(max,Number(p?.saldoAnterior)||0),Number(client.balance)||0)
+    : Number(client.balance)||0;
 
-    // Preguntar el monto
-    const abonoInput = prompt(`--- REGISTRO DE ABONO A CRÉDITO ---\nCliente: ${nombreCliente}\nSaldo Actual: ${saldoActual}\n\nIngrese el monto a abonar ($):`);
-    
-    if (abonoInput && !isNaN(parseFloat(abonoInput.replace(/[^0-9.]/g, '')))) {
-        const monto = parseFloat(abonoInput.replace(/[^0-9.]/g, ''));
-        if (monto <= 0) return alert('El monto debe ser mayor a $0.');
+  const rows=history.length ? history.map(p=>{
+    const saldoAnterior=Number(p?.saldoAnterior)||0;
+    const valor=Number(p?.value)||0;
+    const restante=Number(p?.saldoRestante);
+    return '<tr>'+
+      '<td>'+String(p?.dateTime||p?.date||'—')+'</td>'+
+      '<td>'+money(valor)+'</td>'+
+      '<td>'+money(Number.isFinite(restante)?restante:Math.max(0,saldoAnterior-valor))+'</td>'+
+      '<td>'+esc(p?.refFactura||p?.invoiceRef||'S/N')+'</td>'+
+      '</tr>';
+  }).join('') : '<tr><td colspan="4" class="empty">No hay abonos registrados para este cliente.</td></tr>';
 
-        const refFactura = prompt('Ingrese el # de Factura / Remisión (Opcional):', `FAC-${Math.floor(1000 + Math.random() * 9000)}`) || 'S/N';
-        const fechaHora = new Date().toLocaleString('es-CO');
+  const html='<div class="head" style="margin-bottom:12px"><div><h2>Consulta de abonos</h2><p class="muted">'+esc(client.name||'Cliente')+'</p></div><button class="btn" type="button" id="ventaraCloseAbonoConsulta">Cerrar</button></div>'+
+    '<div class="grid cols3" style="margin-bottom:16px">'+
+    '<div class="card kpi"><div class="label">Saldo inicial registrado</div><div class="value">'+money(initial)+'</div></div>'+
+    '<div class="card kpi"><div class="label">Saldo pendiente actual</div><div class="value">'+money(client.balance||0)+'</div></div>'+
+    '<div class="card kpi"><div class="label">Total abonado</div><div class="value">'+money(history.reduce((a,p)=>a+(Number(p?.value)||0),0))+'</div></div>'+
+    '</div>'+
+    '<div class="tablewrap"><table class="table"><thead><tr><th>Fecha y hora</th><th>Valor abonado</th><th>Saldo restante</th><th>Factura / Ref.</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 
-        const saldoNum = parseFloat(saldoActual.replace(/[^0-9.]/g, '')) || 0;
-        const nuevoSaldo = Math.max(0, saldoNum - monto);
+  if(typeof window.openModal==='function'){
+    window.openModal(html);
+    setTimeout(()=>document.getElementById('ventaraCloseAbonoConsulta')?.addEventListener('click',()=>window.closeModal?.()),0);
+  }
+}
 
-        alert(`========================================\n` +
-              `       COMPROBANTE DE ABONO A CRÉDITO    \n` +
-              `========================================\n` +
-              `Cliente: ${nombreCliente}\n` +
-              `Fecha y Hora: ${fechaHora}\n` +
-              `Factura / Ref: ${refFactura}\n` +
-              `----------------------------------------\n` +
-              `Saldo Anterior: ${saldoActual}\n` +
-              `VALOR ABONADO: $${monto.toLocaleString('es-CO')}\n` +
-              `NUEVO SALDO RESTANTE: $${nuevoSaldo.toLocaleString('es-CO')}\n` +
-              `========================================`);
+function ventaraAgregarConsultar(){
+  const receivables=document.getElementById('receivables');
+  if(!receivables)return;
+  receivables.querySelectorAll('tr').forEach(fila=>{
+    const cells=fila.querySelectorAll('td');
+    if(cells.length<6 || fila.querySelector('.ventara-consultar-abono'))return;
+    const actions=cells[cells.length-1];
+    const abonar=Array.from(actions.querySelectorAll('button')).find(b=>(b.textContent||'').trim().toLowerCase()==='abonar');
+    if(!abonar)return;
+    const consultar=document.createElement('button');
+    consultar.type='button';
+    consultar.className='btn sm ventara-consultar-abono';
+    consultar.textContent='Consultar';
+    consultar.title='Consultar historial de abonos';
+    actions.insertBefore(consultar,abonar.nextSibling);
+  });
+}
 
-       if (fila && fila.querySelectorAll('td')[2]) {
-           fila.querySelectorAll('td')[2].textContent = `$ ${nuevoSaldo.toLocaleString('es-CO')}`;
-       }
-    }
-}, true);
+document.addEventListener('click', function(e){
+  const btn=e.target.closest?.('.ventara-consultar-abono');
+  if(!btn)return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const fila=btn.closest('tr');
+  const info=ventaraAbonoClientByRow(fila);
+  if(info.client) ventaraMostrarConsulta(info.client);
+  else alert('No se encontró el cliente en los datos actuales.');
+},true);
+
+document.addEventListener('click', function(e){
+  const btn=e.target.closest('button, a, input');
+  if(!btn)return;
+
+  const txt=(btn.textContent||btn.value||'').trim().toLowerCase();
+  if(txt!=='abonar'&&!btn.classList.contains('btn-abonar'))return;
+
+  e.preventDefault();
+  e.stopImmediatePropagation();
+
+  const fila=btn.closest('tr');
+  const info=ventaraAbonoClientByRow(fila);
+  const client=info.client;
+  const nombreCliente=info.name;
+  const saldoActual=info.balanceText;
+
+  const saldoAnterior=Number(client?.balance)||ventaraAbonoNumber(saldoActual);
+  const abonoInput=prompt(`--- REGISTRO DE ABONO A CRÉDITO ---\\nCliente: ${nombreCliente}\\nSaldo Actual: ${money(saldoAnterior)}\\n\\nIngrese el monto a abonar ($):`);
+  if(!abonoInput)return;
+
+  const monto=ventaraAbonoNumber(abonoInput);
+  if(!Number.isFinite(monto)||monto<=0){
+    alert('El monto debe ser mayor a $0.');
+    return;
+  }
+
+  const montoAplicado=Math.min(monto,saldoAnterior);
+  const refFactura=prompt('Ingrese el # de Factura / Remisión (Opcional):',`FAC-${Math.floor(1000+Math.random()*9000)}`)||'S/N';
+  const fechaHora=new Date().toLocaleString('es-CO');
+  const nuevoSaldo=Math.max(0,saldoAnterior-montoAplicado);
+
+  if(client){
+    client.balance=nuevoSaldo;
+    const d=getDb();
+    d.payments=Array.isArray(d.payments)?d.payments:[];
+    d.payments.unshift({
+      id:typeof uid==='function'?uid('pa'):'pa-'+Date.now(),
+      date:today(),
+      dateTime:fechaHora,
+      clientId:client.id,
+      value:montoAplicado,
+      method:'Efectivo',
+      type:'abono_cartera',
+      category:'Abono de cartera',
+      isCreditPayment:true,
+      saldoAnterior,
+      saldoRestante:nuevoSaldo,
+      refFactura
+    });
+    try{localStorage.setItem('ventara_pos_v1',JSON.stringify(d))}catch(err){console.warn('[VENTARA] abono local save',err)}
+    try{if(typeof window.cloudSave==='function')Promise.resolve(window.cloudSave()).catch(err=>console.warn('[VENTARA] abono cloud save',err))}catch(err){console.warn('[VENTARA] abono cloud save',err)}
+  }
+
+  alert(`========================================\\n`+
+        `       COMPROBANTE DE ABONO A CRÉDITO    \\n`+
+        `========================================\\n`+
+        `Cliente: ${nombreCliente}\\n`+
+        `Fecha y Hora: ${fechaHora}\\n`+
+        `Factura / Ref: ${refFactura}\\n`+
+        `----------------------------------------\\n`+
+        `Saldo Anterior: ${money(saldoAnterior)}\\n`+
+        `VALOR ABONADO: ${money(montoAplicado)}\\n`+
+        `SALDO PENDIENTE: ${money(nuevoSaldo)}\\n`+
+        `========================================`);
+
+  if(fila && info.cells?.[2])info.cells[2].textContent=money(nuevoSaldo);
+  ventaraAgregarConsultar();
+},true);
+
+function ventaraAbonoWatch(){
+  ventaraAgregarConsultar();
+  const receivables=document.getElementById('receivables');
+  if(receivables&&!window.__ventaraAbonoObserver){
+    window.__ventaraAbonoObserver=true;
+    new MutationObserver(()=>ventaraAgregarConsultar()).observe(receivables,{childList:true,subtree:true});
+  }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ventaraAbonoWatch,{once:true});
+else ventaraAbonoWatch();
+
 })();
