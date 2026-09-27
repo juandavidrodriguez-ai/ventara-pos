@@ -108,64 +108,56 @@ function installCreditPaymentGuard(){
 }
 installCreditPaymentGuard();
 
-/* Abonos: flujo delegado basado directamente en el texto visible de la fila. */
+/* Abonos: flujo directo desde la fila visible, sin validación bloqueante de cliente. */
 document.addEventListener('click', function (e) {
-  const btn = e.target.closest('button, a, input');
-  if (!btn) return;
+    const btn = e.target.closest('button, a, input');
+    if (!btn) return;
+    
+    const txt = (btn.textContent || btn.value || '').trim().toLowerCase();
+    if (txt !== 'abonar' && !btn.classList.contains('btn-abonar')) return;
 
-  const txt = (btn.textContent || btn.value || '').trim().toLowerCase();
-  if (txt !== 'abonar' && !btn.classList.contains('btn-abonar')) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-  e.preventDefault();
-  e.stopPropagation();
+    // Extraer el nombre directamente del texto HTML de la celda
+    const fila = btn.closest('tr');
+    let nombreCliente = 'Cliente';
+    let saldoActual = '$0';
 
-  const fila = btn.closest('tr');
-  let nombreCliente = '';
-  let saldoActual = '$0';
-
-  if (fila) {
-    const celdas = fila.querySelectorAll('td');
-    if (celdas.length > 0) nombreCliente = celdas[0].textContent.trim();
-    if (celdas.length >= 3) saldoActual = celdas[2].textContent.trim();
-  }
-
-  if (!nombreCliente || nombreCliente === 'CLIENTE') {
-    nombreCliente = btn.getAttribute('data-cliente') || btn.getAttribute('data-name') || prompt("Ingrese o confirme el nombre del cliente:");
-  }
-
-  if (nombreCliente) {
-    const abonoInput = prompt(`--- REGISTRO DE ABONO A CRÉDITO ---\nCliente: ${nombreCliente}\nSaldo Pendiente: ${saldoActual}\n\nIngrese el valor abonado ($):`);
-
-    if (abonoInput && !isNaN(parseFloat(abonoInput.replace(/[^0-9.]/g, '')))) {
-      const monto = parseFloat(abonoInput.replace(/[^0-9.]/g, ''));
-      if (monto <= 0) {
-        alert('El monto ingresado debe ser mayor a $0.');
-        return;
-      }
-
-      const refFactura = prompt('Ingrese el # de Factura / Remisión asociada (Opcional):', `FAC-${Math.floor(1000 + Math.random() * 9000)}`) || 'S/N';
-      const fechaHora = new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'medium' });
-
-      const saldoNum = parseFloat(saldoActual.replace(/[^0-9.]/g, '')) || 0;
-      const nuevoSaldo = Math.max(0, saldoNum - monto);
-
-      alert(`========================================\n` +
-            `       COMPROBANTE DE ABONO A CRÉDITO    \n` +
-            `========================================\n` +
-            `Cliente: ${nombreCliente}\n` +
-            `Fecha y Hora: ${fechaHora}\n` +
-            `Factura / Ref: ${refFactura}\n` +
-            `----------------------------------------\n` +
-            `Saldo Anterior: ${saldoActual}\n` +
-            `VALOR ABONADO: $${monto.toLocaleString('es-CO')}\n` +
-            `NUEVO SALDO RESTANTE: $${nuevoSaldo.toLocaleString('es-CO')}\n` +
-            `========================================`);
-
-      if (fila) {
+    if (fila) {
         const celdas = fila.querySelectorAll('td');
-        if (celdas[2]) celdas[2].textContent = `$ ${nuevoSaldo.toLocaleString('es-CO')}`;
-      }
+        if (celdas.length > 0) nombreCliente = celdas[0].textContent.trim();
+        if (celdas.length >= 3) saldoActual = celdas[2].textContent.trim();
     }
-  }
-});
+
+    // Preguntar el monto
+    const abonoInput = prompt(`--- REGISTRO DE ABONO A CRÉDITO ---\nCliente: ${nombreCliente}\nSaldo Actual: ${saldoActual}\n\nIngrese el monto a abonar ($):`);
+    
+    if (abonoInput && !isNaN(parseFloat(abonoInput.replace(/[^0-9.]/g, '')))) {
+        const monto = parseFloat(abonoInput.replace(/[^0-9.]/g, ''));
+        if (monto <= 0) return alert('El monto debe ser mayor a $0.');
+
+        const refFactura = prompt('Ingrese el # de Factura / Remisión (Opcional):', `FAC-${Math.floor(1000 + Math.random() * 9000)}`) || 'S/N';
+        const fechaHora = new Date().toLocaleString('es-CO');
+
+        const saldoNum = parseFloat(saldoActual.replace(/[^0-9.]/g, '')) || 0;
+        const nuevoSaldo = Math.max(0, saldoNum - monto);
+
+        alert(`========================================\n` +
+              `       COMPROBANTE DE ABONO A CRÉDITO    \n` +
+              `========================================\n` +
+              `Cliente: ${nombreCliente}\n` +
+              `Fecha y Hora: ${fechaHora}\n` +
+              `Factura / Ref: ${refFactura}\n` +
+              `----------------------------------------\n` +
+              `Saldo Anterior: ${saldoActual}\n` +
+              `VALOR ABONADO: $${monto.toLocaleString('es-CO')}\n` +
+              `NUEVO SALDO RESTANTE: $${nuevoSaldo.toLocaleString('es-CO')}\n` +
+              `========================================`);
+
+       if (fila && fila.querySelectorAll('td')[2]) {
+           fila.querySelectorAll('td')[2].textContent = `$ ${nuevoSaldo.toLocaleString('es-CO')}`;
+       }
+    }
+}, true);
 })();
