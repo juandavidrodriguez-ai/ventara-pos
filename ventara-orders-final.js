@@ -108,6 +108,38 @@ function installCreditPaymentGuard(){
 }
 
 installCreditPaymentGuard();
+installAbonoButtonGuard();
+
+/* Abonos — vinculación directa y aislada del botón "Abonar" en Fiados/Crédito. */
+function installAbonoButtonGuard(){
+  if(window.__ventaraAbonoButtonGuard)return;
+  window.__ventaraAbonoButtonGuard=true;
+  document.addEventListener('click',function(ev){
+    const button=ev.target?.closest?.('button');
+    const receivables=document.getElementById('receivables');
+    if(!button || !receivables || !receivables.contains(button))return;
+    if((button.textContent||'').trim()!=='Abonar')return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    const row=button.closest('tr');
+    const cells=row?.cells||[];
+    const clientText=String(cells[0]?.innerText||'').trim();
+    const clientName=clientText.split('\n')[0].trim();
+    const clients=Array.isArray(window.db?.clients)?window.db.clients:[];
+    const client=clients.find(c=>String(c?.name||'').trim()===clientName);
+    if(!client){
+      console.error('[VENTARA] No se encontró el cliente del botón Abonar:',clientName);
+      toast('No se pudo identificar el cliente para registrar el abono.');
+      return;
+    }
+    if(typeof window.openPaymentModal!=='function'){
+      console.error('[VENTARA] openPaymentModal no está disponible.');
+      toast('El formulario de abono no está disponible.');
+      return;
+    }
+    window.openPaymentModal(client.id);
+  },true);
+}
 
 /* Abonos — ajuste quirúrgico exclusivamente del modal "Abonar". */
 function ventaraAbonoDateTime(){
