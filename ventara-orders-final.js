@@ -106,5 +106,72 @@ function installCreditPaymentGuard(){
     }
   },true);
 }
+
 installCreditPaymentGuard();
+
+/* Abonos — ajuste quirúrgico exclusivamente del modal "Abonar". */
+function ventaraAbonoDateTime(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function ventaraAbonoRef(s){
+  return String(s?.number||s?.invoiceNumber||s?.factura||s?.reference||s?.referencia||s?.id||'').trim();
+}
+function ventaraAbonoHistoryHtml(c){
+  const h=Array.isArray(c?.historialAbonos)?c.historialAbonos:[];
+  if(!h.length)return '<tr><td colspan="4" class="empty">Aún no hay abonos registrados.</td></tr>';
+  return h.slice().reverse().map(a=>'<tr><td>'+esc(a.fecha||'—')+'</td><td>'+money(a.valorAbono||0)+'</td><td>'+money(a.saldoRestante||0)+'</td><td>'+esc(a.facturaRef||'—')+'</td></tr>').join('');
+}
+function ventaraPrintAbono(data){
+  const old=document.getElementById('ventaraAbonoTicket');if(old)old.remove();
+  const box=document.createElement('div');box.id='ventaraAbonoTicket';
+  box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:100001;padding:20px';
+  box.innerHTML='<div id="ventaraAbonoTicketArea" class="card" style="background:#fff;width:min(420px,95vw);padding:24px"><div style="text-align:center"><h2 style="margin:0">COMPROBANTE DE ABONO</h2><p>VENTARA POS</p></div><div style="line-height:1.9"><div><b>Cliente:</b> '+esc(data.clientName)+'</div><div><b>Fecha y Hora:</b> '+esc(data.fecha)+'</div><div><b>Valor Abonado:</b> '+money(data.valorAbono)+'</div><div><b>Saldo Restante a Pagar:</b> '+money(data.saldoRestante)+'</div></div><div class="actions" style="justify-content:flex-end;margin-top:18px"><button id="ventaraAbonoTicketClose" class="btn" type="button">Cerrar</button><button id="ventaraAbonoTicketPrint" class="btn primary" type="button">🖨 Imprimir</button></div></div>';
+  document.body.appendChild(box);
+  box.querySelector('#ventaraAbonoTicketClose').onclick=()=>box.remove();
+  box.querySelector('#ventaraAbonoTicketPrint').onclick=()=>window.print();
+  const style=document.createElement('style');style.id='ventaraAbonoTicketStyle';style.textContent='@media print{body>*{display:none!important}#ventaraAbonoTicket{display:flex!important;position:static!important;background:#fff!important;padding:0!important}#ventaraAbonoTicketArea{display:block!important;width:100%!important;max-width:420px!important;box-shadow:none!important;border:0!important}#ventaraAbonoTicketArea .actions{display:none!important}}';document.head.appendChild(style);
+  const cleanup=()=>{document.getElementById('ventaraAbonoTicketStyle')?.remove();document.getElementById('ventaraAbonoTicket')?.remove();window.removeEventListener('afterprint',cleanup)};
+  window.addEventListener('afterprint',cleanup);
+}
+window.openPaymentModal=function(id=''){
+  const clients=Array.isArray(window.db?.clients)?window.db.clients.filter(c=>Number(c?.balance)>0):[];
+  const c=clients.find(x=>String(x.id)===String(id))||clients[0];
+  if(!c)return toast('No hay clientes con saldo pendiente.');
+  const sales=(Array.isArray(window.db?.sales)?window.db.sales:[]).filter(s=>String(s?.clientId)===String(c.id)&&String(s?.method||'')==='Crédito').sort((a,b)=>String(b?.date||'').localeCompare(String(a?.date||''))||String(b?.time||'').localeCompare(String(a?.time||'')));
+  const saleOptions=sales.map(s=>'<option value="'+esc(ventaraAbonoRef(s))+'">'+esc(ventaraAbonoRef(s)||'Sin referencia')+' · '+esc(s.date||'')+'</option>').join('');
+  const html='<div class="head" style="margin-bottom:12px"><div><h2>Registrar abono</h2><p class="muted">'+esc(c.name||'Cliente')+' · Saldo actual: <b>'+money(c.balance)+'</b></p></div><button class="btn" type="button" onclick="closeModal()">Cerrar</button></div>'+
+    '<div class="form"><div class="field"><label>Cliente</label><select id="pay_client">'+clients.map(x=>'<option value="'+esc(x.id)+'" '+(String(x.id)===String(c.id)?'selected':'')+'>'+esc(x.name)+' · '+money(x.balance)+'</option>').join('')+'</select></div><div class="field"><label>Valor del abono</label><input id="pay_value" type="number" min="1" step="0.01" placeholder="Ingrese el monto"></div><div class="field"><label>Factura / Referencia de la venta</label><select id="pay_invoice"><option value="">— Seleccionar referencia —</option>'+saleOptions+'</select></div></div>'+
+    '<div class="card" style="margin-top:16px"><h3 style="margin-top:0">HISTORIAL DE ABONOS DE ESTE CLIENTE</h3><div class="tablewrap"><table class="table"><thead><tr><th>FECHA Y HORA</th><th>VALOR ABONADO</th><th>SALDO RESTANTE</th><th>FACTURA / REF</th></tr></thead><tbody>'+ventaraAbonoHistoryHtml(c)+'</tbody></table></div></div>'+
+    '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button class="btn" type="button" onclick="closeModal()">Cancelar</button><button class="btn success" type="button" onclick="savePayment()">Registrar abono</button></div>';
+  openModal(html);
+};
+window.savePayment=function(){
+  try{
+    const clientId=typeof window.v==='function'?window.v('pay_client'):document.getElementById('pay_client')?.value;
+    const c=window.db?.clients?.find(x=>String(x?.id)===String(clientId));
+    if(!c)return toast('Selecciona un cliente.');
+    const raw=Number(document.getElementById('pay_value')?.value||0);
+    if(!Number.isFinite(raw)||raw<=0)return toast('Ingresa un valor de abono válido.');
+    const saldoAnterior=Math.max(0,Number(c.balance)||0);
+    if(saldoAnterior<=0)return toast('El cliente no tiene saldo pendiente.');
+    if(raw>saldoAnterior)return toast('El abono no puede superar el saldo pendiente.');
+    const valorAbono=raw,saldoRestante=saldoAnterior-valorAbono,fecha=ventaraAbonoDateTime();
+    const facturaRef=String(document.getElementById('pay_invoice')?.value||'').trim();
+    c.balance=saldoRestante;
+    c.historialAbonos=Array.isArray(c.historialAbonos)?c.historialAbonos:[];
+    c.historialAbonos.push({fecha,facturaRef,valorAbono,saldoAnterior,saldoRestante});
+    window.db.payments=Array.isArray(window.db.payments)?window.db.payments:[];
+    window.db.payments.unshift({id:typeof window.uid==='function'?window.uid('pa'):'pa-'+Date.now(),date:fecha.split(' ')[0],time:fecha.split(' ')[1],clientId:c.id,value:valorAbono,method:'Abono',facturaRef,saldoAnterior,saldoRestante});
+    if(typeof window.log==='function')window.log('Abono de cartera',c.name);
+    if(typeof window.save==='function')window.save();
+    if(typeof window.closeModal==='function')window.closeModal();
+    if(typeof window.renderReceivables==='function')window.renderReceivables();
+    toast('Abono registrado correctamente.');
+    ventaraPrintAbono({clientName:c.name||'Cliente',fecha,valorAbono,saldoRestante});
+  }catch(err){
+    console.error('[VENTARA] registro de abono:',err);
+    toast('No se pudo registrar el abono: '+(err?.message||String(err)));
+  }
+};
 })();
