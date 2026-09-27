@@ -108,7 +108,7 @@ function installCreditPaymentGuard(){
 }
 installCreditPaymentGuard();
 
-/* Abonos: saldo real, historial consultable y flujo aislado de cartera. */
+/* Abonos: saldo real, historial consultable y flujo visual aislado de cartera. */
 const ventaraAbonoNumber = value => {
   const s = String(value ?? '');
   const cleaned = s.replace(/[^0-9,-]/g, '');
@@ -188,8 +188,122 @@ function ventaraAgregarConsultar(){
     consultar.className='btn sm ventara-consultar-abono';
     consultar.textContent='Consultar';
     consultar.title='Consultar historial de abonos';
+    consultar.style.marginLeft='7px';
     actions.insertBefore(consultar,abonar.nextSibling);
   });
+}
+
+function ventaraGuardarAbono(fila,info,montoInput,refInput){
+  const client=info.client;
+  if(!client)return false;
+
+  const saldoAnterior=Number(client.balance)||ventaraAbonoNumber(info.balanceText);
+  const monto=ventaraAbonoNumber(montoInput?.value);
+  if(!Number.isFinite(monto)||monto<=0){
+    alert('El monto debe ser mayor a $0.');
+    montoInput?.focus();
+    return false;
+  }
+
+  const montoAplicado=Math.min(monto,saldoAnterior);
+  const refFactura=String(refInput?.value||'').trim()||'S/N';
+  const fechaHora=new Date().toLocaleString('es-CO');
+  const nuevoSaldo=Math.max(0,saldoAnterior-montoAplicado);
+
+  client.balance=nuevoSaldo;
+  const d=getDb();
+  d.payments=Array.isArray(d.payments)?d.payments:[];
+  d.payments.unshift({
+    id:typeof uid==='function'?uid('pa'):'pa-'+Date.now(),
+    date:today(),
+    dateTime:fechaHora,
+    clientId:client.id,
+    value:montoAplicado,
+    method:'Efectivo',
+    type:'abono_cartera',
+    category:'Abono de cartera',
+    isCreditPayment:true,
+    saldoAnterior,
+    saldoRestante:nuevoSaldo,
+    refFactura
+  });
+
+  try{localStorage.setItem('ventara_pos_v1',JSON.stringify(d))}catch(err){console.warn('[VENTARA] abono local save',err)}
+  try{if(typeof window.cloudSave==='function')Promise.resolve(window.cloudSave()).catch(err=>console.warn('[VENTARA] abono cloud save',err))}catch(err){console.warn('[VENTARA] abono cloud save',err)}
+
+  if(fila && info.cells?.[2])info.cells[2].textContent=money(nuevoSaldo);
+  return {saldoAnterior,montoAplicado,refFactura,fechaHora,nuevoSaldo};
+}
+
+function ventaraMostrarComprobanteAbono(data,nombreCliente){
+  const html='<div style="max-width:620px;margin:auto">'+
+    '<div style="text-align:center;padding:4px 0 14px"><div style="font-size:34px;line-height:1">✓</div><h2 style="margin:8px 0 4px">Abono registrado</h2><p class="muted" style="margin:0">Comprobante de abono a crédito</p></div>'+
+    '<div class="card" style="box-shadow:none;border:1px solid var(--border);margin-bottom:14px">'+
+      '<div class="grid cols2" style="gap:12px">'+
+        '<div><small class="muted">Cliente</small><div><b>'+esc(nombreCliente)+'</b></div></div>'+
+        '<div><small class="muted">Fecha y hora</small><div><b>'+esc(data.fechaHora)+'</b></div></div>'+
+        '<div><small class="muted">Factura / Ref.</small><div><b>'+esc(data.refFactura)+'</b></div></div>'+
+        '<div><small class="muted">Saldo anterior</small><div><b>'+money(data.saldoAnterior)+'</b></div></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="card" style="box-shadow:none;border:1px solid var(--border);margin-bottom:14px">'+
+      '<div class="totalline"><span>Valor abonado</span><b>'+money(data.montoAplicado)+'</b></div>'+
+      '<div class="totalline grand"><span>Saldo pendiente</span><b>'+money(data.nuevoSaldo)+'</b></div>'+
+    '</div>'+
+    '<div class="actions" style="justify-content:flex-end"><button type="button" class="btn primary" id="ventaraCerrarComprobante">Aceptar</button></div>'+
+  '</div>';
+
+  if(typeof window.openModal==='function'){
+    window.openModal(html);
+    setTimeout(()=>document.getElementById('ventaraCerrarComprobante')?.addEventListener('click',()=>{
+      window.closeModal?.();
+      const receivables=document.getElementById('receivables');
+      if(receivables)ventaraAgregarConsultar();
+    }),0);
+  }
+}
+
+function ventaraMostrarAbonoForm(fila,info){
+  if(!info.client){
+    alert('No se encontró el cliente en los datos actuales.');
+    return;
+  }
+
+  const saldo=Number(info.client.balance)||ventaraAbonoNumber(info.balanceText);
+  const nombre=info.name;
+  const refDefault='FAC-'+Math.floor(1000+Math.random()*9000);
+
+  const html='<div style="max-width:620px;margin:auto">'+
+    '<div class="head" style="margin-bottom:18px"><div><h2 style="margin-bottom:4px">Registrar abono</h2><p class="muted" style="margin:0">Abono a crédito del cliente</p></div><button class="btn" type="button" id="ventaraCancelarAbono">Cerrar</button></div>'+
+    '<div class="card" style="box-shadow:none;border:1px solid var(--border);margin-bottom:16px">'+
+      '<div class="grid cols2" style="gap:14px">'+
+        '<div><small class="muted">Cliente</small><div style="font-size:18px"><b>'+esc(nombre)+'</b></div></div>'+
+        '<div><small class="muted">Saldo pendiente actual</small><div style="font-size:18px"><b>'+money(saldo)+'</b></div></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="form">'+
+      '<div class="field"><label>Valor a abonar</label><input id="ventaraAbonoMonto" type="number" min="1" step="1" placeholder="Ej. 1000" autofocus></div>'+
+      '<div class="field"><label>Factura / Remisión (opcional)</label><input id="ventaraAbonoRef" value="'+esc(refDefault)+'" placeholder="FAC-0000"></div>'+
+    '</div>'+
+    '<div style="margin-top:10px;padding:11px 13px;border-radius:10px;background:var(--bg,#f5f7f9);border:1px solid var(--border)"><span class="muted">El saldo se actualizará automáticamente después de registrar el abono.</span></div>'+
+    '<div class="actions" style="justify-content:flex-end;margin-top:18px"><button type="button" class="btn" id="ventaraCancelarAbono2">Cancelar</button><button type="button" class="btn primary" id="ventaraRegistrarAbono">Registrar abono</button></div>'+
+  '</div>';
+
+  if(typeof window.openModal==='function'){
+    window.openModal(html);
+    setTimeout(()=>{
+      document.getElementById('ventaraCancelarAbono')?.addEventListener('click',()=>window.closeModal?.());
+      document.getElementById('ventaraCancelarAbono2')?.addEventListener('click',()=>window.closeModal?.());
+      const monto=document.getElementById('ventaraAbonoMonto');
+      const ref=document.getElementById('ventaraAbonoRef');
+      const registrar=document.getElementById('ventaraRegistrarAbono');
+      registrar?.addEventListener('click',()=>{
+        const data=ventaraGuardarAbono(fila,info,monto,ref);
+        if(data)ventaraMostrarComprobanteAbono(data,nombre);
+      });
+      monto?.focus();
+    },0);
+  }
 }
 
 document.addEventListener('click', function(e){
@@ -215,61 +329,7 @@ document.addEventListener('click', function(e){
 
   const fila=btn.closest('tr');
   const info=ventaraAbonoClientByRow(fila);
-  const client=info.client;
-  const nombreCliente=info.name;
-  const saldoActual=info.balanceText;
-
-  const saldoAnterior=Number(client?.balance)||ventaraAbonoNumber(saldoActual);
-  const abonoInput=prompt(`--- REGISTRO DE ABONO A CRÉDITO ---\\nCliente: ${nombreCliente}\\nSaldo Actual: ${money(saldoAnterior)}\\n\\nIngrese el monto a abonar ($):`);
-  if(!abonoInput)return;
-
-  const monto=ventaraAbonoNumber(abonoInput);
-  if(!Number.isFinite(monto)||monto<=0){
-    alert('El monto debe ser mayor a $0.');
-    return;
-  }
-
-  const montoAplicado=Math.min(monto,saldoAnterior);
-  const refFactura=prompt('Ingrese el # de Factura / Remisión (Opcional):',`FAC-${Math.floor(1000+Math.random()*9000)}`)||'S/N';
-  const fechaHora=new Date().toLocaleString('es-CO');
-  const nuevoSaldo=Math.max(0,saldoAnterior-montoAplicado);
-
-  if(client){
-    client.balance=nuevoSaldo;
-    const d=getDb();
-    d.payments=Array.isArray(d.payments)?d.payments:[];
-    d.payments.unshift({
-      id:typeof uid==='function'?uid('pa'):'pa-'+Date.now(),
-      date:today(),
-      dateTime:fechaHora,
-      clientId:client.id,
-      value:montoAplicado,
-      method:'Efectivo',
-      type:'abono_cartera',
-      category:'Abono de cartera',
-      isCreditPayment:true,
-      saldoAnterior,
-      saldoRestante:nuevoSaldo,
-      refFactura
-    });
-    try{localStorage.setItem('ventara_pos_v1',JSON.stringify(d))}catch(err){console.warn('[VENTARA] abono local save',err)}
-    try{if(typeof window.cloudSave==='function')Promise.resolve(window.cloudSave()).catch(err=>console.warn('[VENTARA] abono cloud save',err))}catch(err){console.warn('[VENTARA] abono cloud save',err)}
-  }
-
-  alert(`========================================\\n`+
-        `       COMPROBANTE DE ABONO A CRÉDITO    \\n`+
-        `========================================\\n`+
-        `Cliente: ${nombreCliente}\\n`+
-        `Fecha y Hora: ${fechaHora}\\n`+
-        `Factura / Ref: ${refFactura}\\n`+
-        `----------------------------------------\\n`+
-        `Saldo Anterior: ${money(saldoAnterior)}\\n`+
-        `VALOR ABONADO: ${money(montoAplicado)}\\n`+
-        `SALDO PENDIENTE: ${money(nuevoSaldo)}\\n`+
-        `========================================`);
-
-  if(fila && info.cells?.[2])info.cells[2].textContent=money(nuevoSaldo);
-  ventaraAgregarConsultar();
+  ventaraMostrarAbonoForm(fila,info);
 },true);
 
 function ventaraAbonoWatch(){
