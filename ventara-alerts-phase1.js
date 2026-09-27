@@ -2,7 +2,7 @@
 (()=>{
   'use strict';
   const W=window;
-  const getDb=()=>{try{return W.db||null}catch(e){return null}};
+  const getDb=()=>{try{if(W.db&&typeof W.db==='object')return W.db;return (typeof db!=='undefined'&&db&&typeof db==='object')?db:null}catch(e){try{return (typeof db!=='undefined'&&db&&typeof db==='object')?db:null}catch(_){return null}}};
   const products=()=>{try{const d=getDb();return Array.isArray(d?.products)?d.products:[]}catch(e){return[]}};
 
   function getSuppliersList(){try{
@@ -72,7 +72,8 @@
     if(!category&&!min)return false;
     const currentId=productIdFromModal();
     const currentProduct=products().find(x=>String(x?.id)===String(currentId));
-    const currentSuppliers=(W.db&&Array.isArray(W.db.suppliers))?W.db.suppliers:(()=>{try{const parsed=JSON.parse(W.localStorage?.getItem('db_suppliers')||'[]');return Array.isArray(parsed)?parsed:(Array.isArray(parsed?.suppliers)?parsed.suppliers:[])}catch(e){return[]}})();
+    const currentDb=getDb();
+    const currentSuppliers=(currentDb&&Array.isArray(currentDb.suppliers))?currentDb.suppliers:(()=>{try{const parsed=JSON.parse(W.localStorage?.getItem('db_suppliers')||'[]');return Array.isArray(parsed)?parsed:(Array.isArray(parsed?.suppliers)?parsed.suppliers:[])}catch(e){return[]}})();
     let optionsHTML='<option value="">Sin Proveedor</option>';
     currentSuppliers.forEach(s=>{try{
       const id=s?.id||s?.supplierId||s?.nit||s?.nombre;
@@ -130,7 +131,7 @@
   }catch(e){console.warn('[VENTARA] inject button',e);return false}}
 
   function showAlerts(){try{
-    const rows=products().filter(p=>{const stock=Number(p?.stockActual??p?.stock??0),min=Number(p?.stockMin??p?.min);return Number.isFinite(stock)&&Number.isFinite(min)&&min>0&&stock<=min});
+    const rows=products().filter(p=>{const stock=Number(p?.stock??p?.stockActual??0),min=Number(p?.min??p?.stockMin);return Number.isFinite(stock)&&Number.isFinite(min)&&min>0&&stock<=min});
     const body=rows.length?rows.map(p=>{const name=String(p?.name||p?.description||'Producto sin nombre');const currentSupplier=supplierName(p?.supplierId);const supplier=currentSupplier&&currentSupplier!=='Sin Proveedor'?currentSupplier:String(p?.supplierName||'Sin Proveedor');return '<tr><td>'+esc(name)+'</td><td>'+esc(supplier)+'</td></tr>'}).join(''):'<tr><td colspan="2" class="empty">No hay alertas de stock pendiente.</td></tr>';
     const html='<h2>Alertas de Stock</h2><div class="card" style="box-shadow:none;background:#f8fafc"><table class="table"><thead><tr><th>Producto</th><th>Proveedor</th></tr></thead><tbody>'+body+'</tbody></table></div><div class="actions" style="margin-top:15px"><button class="btn" type="button" onclick="window.closeModal()">Cerrar</button></div>';
     if(typeof W.openModal==='function')W.openModal(html);else alert(rows.length?rows.map(p=>`${p?.name||'Producto'} — ${p?.supplierName||supplierName(p?.supplierId)} — actual: ${p?.stockActual??p?.stock??0} — mínimo: ${p?.stockMin??p?.min??0} — sugerido: ${Math.max(0,Number(p?.stockMax??0)-Number(p?.stockActual??p?.stock??0))}`).join('\n'):'No hay alertas de stock pendiente.');
