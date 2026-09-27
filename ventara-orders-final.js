@@ -107,40 +107,55 @@ function installCreditPaymentGuard(){
   },true);
 }
 installCreditPaymentGuard();
-/* Abonos de cartera: bloque aislado. No intercepta clicks globales. */
+
+/* Abonos: único flujo delegado y persistente. */
+document.addEventListener('click',function(event){
+  const btn=event.target.closest?.('button, a, input[type="button"]');
+  if(!btn)return;
+  const text=String(btn.textContent||btn.value||'').trim().toLowerCase();
+  if(text!=='abonar'&&!btn.classList.contains('btn-abonar'))return;
+  const row=btn.closest('tr');
+  if(!row)return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const cells=row.querySelectorAll('td');
+  const name=String(cells[0]?.innerText||'Cliente').split('\n')[0].trim();
+  const clients=Array.isArray(window.db?.clients)?window.db.clients:[];
+  const client=clients.find(c=>String(c?.name||'').trim()===name);
+  if(!client){alert('No se pudo identificar el cliente.');return;}
+  if(typeof window.openPaymentModal!=='function'){alert('El formulario de abono no está disponible.');return;}
+  window.openPaymentModal(client.id);
+},true);
+
 window.openPaymentModal=function(id){
-  try{
-    const clients=Array.isArray(window.db?.clients)?window.db.clients.filter(c=>Number(c?.balance)>0):[];
-    const client=clients.find(c=>String(c.id)===String(id));
-    if(!client){ if(typeof window.toast==='function')window.toast('No hay saldo pendiente para este cliente.'); return; }
-    window.__ventaraAbonoClientId=client.id;
-    const payments=Array.isArray(window.db?.payments)?window.db.payments:[];
-    const own=Array.isArray(client.historialAbonos)?client.historialAbonos:[];
-    const old=payments.filter(p=>String(p?.clientId)===String(client.id)&&String(p?.method||'').toLowerCase()==='abono');
-    const all=[...own.map(a=>({fecha:a.fecha||'',valorAbono:Number(a.valorAbono)||0,saldoRestante:Number(a.saldoRestante),facturaRef:a.facturaRef||''})),...old.map(p=>({fecha:String(p.date||'')+(p.time?' '+p.time:''),valorAbono:Number(p.value)||0,saldoRestante:Number(p.saldoRestante),facturaRef:p.facturaRef||p.reference||p.referencia||''}))];
-    const seen=new Set(),history=all.filter(a=>{const k=[a.fecha,a.valorAbono,a.facturaRef,a.saldoRestante].join('|');if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
-    const rows=history.length?history.map(a=>'<tr><td>'+esc(a.fecha||'—')+'</td><td>'+money(a.valorAbono)+'</td><td>'+money(Number.isFinite(a.saldoRestante)?a.saldoRestante:0)+'</td><td>'+esc(a.facturaRef||'—')+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">Aún no hay abonos registrados.</td></tr>';
-    const sales=Array.isArray(window.db?.sales)?window.db.sales.filter(s=>String(s?.clientId)===String(client.id)&&String(s?.method||'')==='Crédito'):[];
-    const options=sales.map(s=>{const ref=String(s?.number||s?.invoiceNumber||s?.factura||s?.reference||s?.referencia||s?.id||'');return '<option value="'+esc(ref)+'">'+esc(ref||'Sin referencia')+'</option>';}).join('');
-    const html='<div class="head"><div><h2>Registrar abono</h2><p class="muted">'+esc(client.name||'Cliente')+' · Saldo pendiente: <b>'+money(client.balance)+'</b></p></div></div>'+
-      '<div class="form"><div class="field"><label>Cliente</label><input value="'+esc(client.name||'')+'" disabled></div><div class="field"><label>Valor del abono</label><input id="pay_value" type="number" min="1" step="0.01" placeholder="Ingrese el monto"></div><div class="field"><label>Factura / Referencia</label><select id="pay_invoice"><option value="">— Seleccionar —</option>'+options+'</select></div></div>'+
-      '<div class="card" style="margin-top:16px"><h3>HISTORIAL DE ABONOS</h3><div class="tablewrap"><table class="table"><thead><tr><th>FECHA Y HORA</th><th>VALOR ABONADO</th><th>SALDO RESTANTE</th><th>FACTURA / REF</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
-      '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button class="btn" type="button" onclick="closeModal()">Cancelar</button><button class="btn success" type="button" onclick="savePayment()">Registrar abono</button></div>';
-    if(typeof window.openModal!=='function')throw new Error('openModal no disponible');
-    window.openModal(html);
-  }catch(err){console.error('[VENTARA] Abonar:',err);if(typeof window.toast==='function')window.toast('No se pudo abrir el registro de abono.');}
+  const client=window.db?.clients?.find(c=>String(c?.id)===String(id));
+  if(!client){alert('No se encontró el cliente.');return;}
+  window.__ventaraAbonoClientId=client.id;
+  const payments=Array.isArray(window.db?.payments)?window.db.payments:[];
+  const own=Array.isArray(client.historialAbonos)?client.historialAbonos:[];
+  const history=[...own.map(a=>a),...payments.filter(p=>String(p?.clientId)===String(client.id)&&String(p?.method||'').toLowerCase()==='abono').map(p=>({fecha:String(p.date||'')+(p.time?' '+p.time:''),valorAbono:Number(p.value)||0,saldoRestante:Number(p.saldoRestante),facturaRef:p.facturaRef||p.reference||p.referencia||''}))];
+  const seen=new Set();
+  const rows=history.filter(a=>{const k=[a.fecha,a.valorAbono,a.saldoRestante,a.facturaRef].join('|');if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>String(b.fecha||'').localeCompare(String(a.fecha||''))).map(a=>'<tr><td>'+esc(a.fecha||'—')+'</td><td>'+money(a.valorAbono||0)+'</td><td>'+money(Number.isFinite(a.saldoRestante)?a.saldoRestante:0)+'</td><td>'+esc(a.facturaRef||'—')+'</td></tr>').join('')||'<tr><td colspan="4" class="empty">Aún no hay abonos registrados.</td></tr>';
+  const html='<h2>Registrar abono</h2><p class="muted">'+esc(client.name||'Cliente')+' · Saldo pendiente: <b>'+money(client.balance)+'</b></p><div class="form"><div class="field"><label>Valor del abono</label><input id="pay_value" type="number" min="1" step="0.01"></div><div class="field"><label>Factura / Referencia</label><input id="pay_invoice" type="text" placeholder="Opcional"></div></div><div class="card" style="margin-top:16px"><h3>HISTORIAL DE ABONOS</h3><div class="tablewrap"><table class="table"><thead><tr><th>FECHA Y HORA</th><th>VALOR ABONADO</th><th>SALDO RESTANTE</th><th>FACTURA / REF</th></tr></thead><tbody>'+rows+'</tbody></table></div></div><div class="actions" style="justify-content:flex-end;margin-top:16px"><button class="btn" type="button" onclick="closeModal()">Cancelar</button><button class="btn success" type="button" onclick="savePayment()">Registrar abono</button></div>';
+  if(typeof window.openModal!=='function'){alert('No se pudo abrir el modal.');return;}
+  window.openModal(html);
 };
 window.savePayment=function(){
-  try{
-    const value=Number(document.getElementById('pay_value')?.value||0),client=window.db?.clients?.find(c=>String(c.id)===String(window.__ventaraAbonoClientId));
-    if(!client)return window.toast?.('No se pudo identificar el cliente.');
-    if(!Number.isFinite(value)||value<=0)return window.toast?.('Ingresa un valor de abono válido.');
-    const before=Number(client.balance)||0;if(value>before)return window.toast?.('El abono no puede superar el saldo pendiente.');
-    const now=new Date(),fecha=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),after=before-value,facturaRef=String(document.getElementById('pay_invoice')?.value||'');
-    client.balance=after;client.historialAbonos=Array.isArray(client.historialAbonos)?client.historialAbonos:[];client.historialAbonos.push({fecha,valorAbono:value,saldoAnterior:before,saldoRestante:after,facturaRef});
-    window.db.payments=Array.isArray(window.db.payments)?window.db.payments:[];window.db.payments.unshift({id:'pa-'+Date.now(),date:fecha.slice(0,10),time:fecha.slice(11),clientId:client.id,value,method:'Abono',facturaRef,saldoAnterior:before,saldoRestante:after});
-    if(typeof window.save==='function')window.save();if(typeof window.closeModal==='function')window.closeModal();if(typeof window.renderReceivables==='function')window.renderReceivables();if(typeof window.toast==='function')window.toast('Abono registrado correctamente.');
-    alert('ABONO REGISTRADO\n\nCliente: '+(client.name||'Cliente')+'\nFecha / Hora: '+fecha+'\nValor: '+money(value)+'\nSaldo restante: '+money(after));
-  }catch(err){console.error('[VENTARA] guardar abono:',err);alert('No se pudo registrar el abono: '+(err?.message||String(err)));}
+  const client=window.db?.clients?.find(c=>String(c?.id)===String(window.__ventaraAbonoClientId));
+  const value=Number(document.getElementById('pay_value')?.value||0);
+  if(!client||!Number.isFinite(value)||value<=0){alert('Ingresa un valor de abono válido.');return;}
+  const before=Number(client.balance)||0;
+  if(value>before){alert('El abono no puede superar el saldo pendiente.');return;}
+  const d=new Date(),fecha=d.toLocaleString('es-CO',{dateStyle:'short',timeStyle:'medium'}),after=before-value,ref=String(document.getElementById('pay_invoice')?.value||'').trim();
+  client.balance=after;
+  client.historialAbonos=Array.isArray(client.historialAbonos)?client.historialAbonos:[];
+  client.historialAbonos.push({fecha,valorAbono:value,saldoAnterior:before,saldoRestante:after,facturaRef:ref});
+  window.db.payments=Array.isArray(window.db.payments)?window.db.payments:[];
+  window.db.payments.unshift({id:'pa-'+Date.now(),date:fecha,clientId:client.id,value,method:'Abono',facturaRef:ref,saldoAnterior:before,saldoRestante:after});
+  if(typeof window.save==='function')window.save();
+  if(typeof window.closeModal==='function')window.closeModal();
+  if(typeof window.renderReceivables==='function')window.renderReceivables();
+  alert('ABONO REGISTRADO\n\nCliente: '+client.name+'\nFecha / Hora: '+fecha+'\nValor: '+money(value)+'\nSaldo restante: '+money(after));
 };
+
 })();
