@@ -13,6 +13,9 @@
   const getDb=()=>{try{if(typeof db!=='undefined'&&db && typeof db==='object')return db;return window.db||null}catch(_){try{return window.db||null}catch(__){return null}}};
   const notify=(m)=>{try{if(typeof window.toast==='function')window.toast(String(m));else alert(String(m))}catch(_){}};
   const esc=(v)=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  // Factura/referencia no es dinero: no usar separadores de miles. Acepta también registros antiguos como 2.227.
+  const normalizeReference=(v)=>{const s=String(v??'').trim();return /^\d[\d\s.,]*$/.test(s)?s.replace(/[\s.,]/g,''):s};
+  const normalizeDate=(v)=>String(v??'').trim().replace(/^(\d)\.(\d{3})-(\d{2})-(\d{2})$/,'$1$2-$3-$4');
   const money=(v)=>{const n=Number(v||0);return '$ '+new Intl.NumberFormat('es-CO',{maximumFractionDigits:0}).format(Number.isFinite(n)?n:0)};
   const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
   const id=(p='cp')=>{try{return typeof window.uid==='function'?window.uid(p):p+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,8)}catch(_){return p+'-'+Date.now()}};
