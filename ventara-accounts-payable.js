@@ -83,6 +83,8 @@
   }
 
   function normalizeRecord(r){
+    r.invoice=normalizeReference(r.invoice);
+    r.fecha=normalizeDate(r.fecha);
     r.total=Math.max(0,Number(r.total||0));
     r.abonado=Math.min(r.total,Math.max(0,Number(r.abonado||0)));
     r.abonos=Array.isArray(r.abonos)?r.abonos:[];
@@ -217,13 +219,15 @@
 
   function applyFilters(){
     const root=document.getElementById(ROOT_ID);if(!root)return;
-    const q=String(root.querySelector('[data-vap-search]')?.value||'').trim().toLowerCase();
+    const qRaw=String(root.querySelector('[data-vap-search]')?.value||'').trim().toLowerCase();
+    const q=normalizeReference(qRaw);
     const st=String(root.querySelector('[data-vap-filter-state]')?.value||'');
     const d=ensureArray();if(!d)return;
     root.querySelectorAll('[data-vap-body] tr').forEach(tr=>{
       const text=(tr.textContent||'').toLowerCase();
+      const key=String(tr.getAttribute('data-vap-search-key')||'');
       const select=tr.querySelector('[data-vap-status]');
-      const okQ=!q||text.includes(q);
+      const okQ=!q||key.includes(q)||normalizeReference(text).includes(q);
       const okS=!st||select?.value===st;
       tr.style.display=okQ&&okS?'':'none';
     });
@@ -249,7 +253,7 @@
   function savePayable(){
     const d=ensureArray();if(!d)return;
     const supplierId=document.getElementById('vap_supplier')?.value||'';
-    const invoice=String(document.getElementById('vap_invoice')?.value||'').trim();
+    const invoice=normalizeReference(document.getElementById('vap_invoice')?.value||'');
     const fecha=document.getElementById('vap_date')?.value||today();
     const due=document.getElementById('vap_due')?.value||'';
     const total=Math.max(0,Number(document.getElementById('vap_total')?.value||0));
