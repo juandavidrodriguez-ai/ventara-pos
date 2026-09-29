@@ -152,7 +152,14 @@
     const root=document.getElementById(ROOT_ID); if(!root)return;
     const d=ensureArray(); if(!d)return;
     if(seedFromCreditPurchases())persist();
-    d.accountsPayable.forEach(normalizeRecord);
+    let normalizedChanged=false;
+    d.accountsPayable.forEach(r=>{
+      const oldInvoice=String(r?.invoice??'');
+      const oldFecha=String(r?.fecha??'');
+      normalizeRecord(r);
+      if(oldInvoice!==String(r?.invoice??'') || oldFecha!==String(r?.fecha??'')) normalizedChanged=true;
+    });
+    if(normalizedChanged)persist();
     const t=totals(d.accountsPayable);
     window[TAB_KEY]='payables';
 
