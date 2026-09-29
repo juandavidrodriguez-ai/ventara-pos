@@ -10,14 +10,14 @@
   const WRAP_KEY='__ventaraPayablesRenderWrapped';
   const STATES=['Pendiente','Abono parcial','Vencido','Pagado'];
 
-  const getDb=()=>{try{if(typeof db!=='undefined'&&db)return db;return window.db||null}catch(_){try{return window.db||null}catch(__){return null}}};
+  const getDb=()=>{try{if(typeof db!=='undefined'&&db && typeof db==='object')return db;return window.db||null}catch(_){try{return window.db||null}catch(__){return null}}};
   const notify=(m)=>{try{if(typeof window.toast==='function')window.toast(String(m));else alert(String(m))}catch(_){}};
   const esc=(v)=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   const money=(v)=>{const n=Number(v||0);return '$ '+new Intl.NumberFormat('es-CO',{maximumFractionDigits:0}).format(Number.isFinite(n)?n:0)};
   const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
   const id=(p='cp')=>{try{return typeof window.uid==='function'?window.uid(p):p+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,8)}catch(_){return p+'-'+Date.now()}};
-  const db=()=>getDb();
-  const suppliers=()=>Array.isArray(db()?.suppliers)?db().suppliers:[];
+  const stateDb=()=>getDb();
+  const suppliers=()=>Array.isArray(stateDb()?.suppliers)?stateDb().suppliers:[];
   const supplierName=(sid)=>{const s=suppliers().find(x=>String(x?.id)===String(sid));return s?.name||s?.nombre||s?.razonSocial||'Proveedor sin nombre'};
   const pending=(r)=>Math.max(0,Number(r?.total||0)-Number(r?.abonado||0));
   const paid=(r)=>Math.max(0,Number(r?.abonado||0));
@@ -32,7 +32,7 @@
   }
 
   function ensureArray(){
-    const d=db(); if(!d)return null;
+    const d=stateDb(); if(!d)return null;
     d.accountsPayable=Array.isArray(d.accountsPayable)?d.accountsPayable:[];
     return d;
   }
