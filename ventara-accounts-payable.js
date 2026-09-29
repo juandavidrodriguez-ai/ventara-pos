@@ -392,5 +392,19 @@
 
   setInterval(installRenderHook,1200);
 
+  // Navegación robusta: el botón de Proveedores no depende del render del módulo principal.
+  const openPayablesFromButton=(ev)=>{
+    const b=ev?.target?.closest?.('[data-vap-open]');
+    if(!b)return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    window[TAB_KEY]='payables';
+    try{renderPayables()}catch(e){console.error('[VENTARA] open payables',e);notify('No se pudo abrir Cuentas por pagar.')}
+  };
+  if(!window.__ventaraPayablesClickHook){
+    document.addEventListener('click',openPayablesFromButton,true);
+    window.__ventaraPayablesClickHook=true;
+  }
+  window.openVentaraPayables=()=>{window[TAB_KEY]='payables';renderPayables()};
   window.ventaraAccountsPayable={render:renderPayables,openNew:openPayableModal,registerPayment:openPaymentModal,find};
 })();
