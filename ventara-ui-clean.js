@@ -281,7 +281,7 @@
 })();
 
 /* VENTARA: carga aislada del parche de Compras sin tocar index.html. */
-(()=>{if(document.querySelector('script[data-ventara-purchases-fix]'))return;const s=document.createElement('script');s.src='ventara-purchases-fix.js?v=20260929-2';s.async=false;s.dataset.ventaraPurchasesFix='1';document.head.appendChild(s);})();
+(()=>{if(document.querySelector('script[data-ventara-purchases-fix]'))return;const s=document.createElement('script');s.src='ventara-purchases-fix.js?v=20260929-4';s.async=false;s.dataset.ventaraPurchasesFix='1';document.head.appendChild(s);})();
 
 /* VENTARA: carga aislada del formateador numérico visual. No modifica valores internos. */
 (()=>{if(document.querySelector('script[data-ventara-number-format-fix]'))return;const s=document.createElement('script');s.src='ventara-number-format-fix.js?v=20260918';s.async=false;s.dataset.ventaraNumberFormatFix='1';document.head.appendChild(s);})();
@@ -316,4 +316,4 @@
 /* VENTARA: carga aislada del formulario Precio + IVA + Total. */
 (()=>{if(document.querySelector('script[data-ventara-price-iva-layout-fix]'))return;const s=document.createElement('script');s.src='ventara-price-iva-layout-fix.js?v=20260920-3';s.async=false;s.dataset.ventaraPriceIvaLayoutFix='1';document.head.appendChild(s);})();
 /* VENTARA: carga aislada de Cuentas por pagar a proveedores. */
-(()=>{if(document.querySelector('script[data-ventara-accounts-payable]'))return;const s=document.createElement('script');s.src='ventara-accounts-payable.js?v=20260929-3';s.async=false;s.dataset.ventaraAccountsPayable='1';document.head.appendChild(s);})();
+(()=>{if(document.querySelector('script[data-ventara-accounts-payable]'))return;const s=document.createElement('script');s.src='ventara-accounts-payable.js?v=20260929-4';s.async=false;s.dataset.ventaraAccountsPayable='1';document.head.appendChild(s);})();
