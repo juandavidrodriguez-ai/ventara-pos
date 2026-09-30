@@ -388,7 +388,7 @@
       '<div class="field"><label>Fecha de vencimiento</label><input id="vap_edit_due" type="date" value="'+esc(r.vencimiento||'')+'"></div>'+
       '<div class="field full"><label>Total de la factura</label><input id="vap_edit_total" type="number" min="'+esc(paid(r))+'" step="1" inputmode="numeric" value="'+esc(r.total)+'"></div>'+
       '</div>'+
-      '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" id="vap_edit_cancel">Cancelar</button><button type="button" class="btn primary" id="vap_edit_save" onclick="window.__ventaraSaveEditedPayable('+JSON.stringify(idv)+')">Guardar cambios</button></div>';
+      '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" id="vap_edit_cancel">Cancelar</button><button type="button" class="btn primary" id="vap_edit_save" onclick="window.__ventaraSaveEditedPayable(this.dataset.id)" data-id="'+esc(idv)+'">Guardar cambios</button></div>';
     if(typeof window.openModal!=='function')return;
     // El handler se publica antes de insertar el HTML: el botón queda con onclick directo.
     window.__ventaraSaveEditedPayable=saveEditedPayable;
