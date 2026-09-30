@@ -183,6 +183,7 @@
         '<td><div class="actions" style="gap:5px">'+
           (pending(r)>0?'<button type="button" class="btn sm success" data-vap-payall="'+esc(r.id)+'">Pagar todo</button>':'')+
           '<button type="button" class="btn sm" data-vap-view="'+esc(r.id)+'">Ver</button>'+
+          '<button type="button" class="btn sm" data-vap-edit="'+esc(r.id)+'">Editar</button>'+
         '</div></td>'+
       '</tr>';
     }).join('');
@@ -224,6 +225,7 @@
     root.querySelectorAll('[data-vap-abono]').forEach(b=>b.addEventListener('click',()=>openPaymentModal(b.getAttribute('data-vap-abono'))));
     root.querySelectorAll('[data-vap-payall]').forEach(b=>b.addEventListener('click',()=>payAll(b.getAttribute('data-vap-payall'))));
     root.querySelectorAll('[data-vap-view]').forEach(b=>b.addEventListener('click',()=>viewPayable(b.getAttribute('data-vap-view'))));
+    root.querySelectorAll('[data-vap-edit]').forEach(b=>b.addEventListener('click',()=>openEditPayableModal(b.getAttribute('data-vap-edit'))));
     root.querySelectorAll('[data-vap-status]').forEach(s=>s.addEventListener('change',()=>changeStatus(s.getAttribute('data-vap-status'),s.value)));
   }
 
@@ -353,6 +355,71 @@
     r.estado=newState;
     persist();
     renderPayables();
+  }
+
+  function openEditPayableModal(idv){
+    const r=find(idv);if(!r)return;
+    normalizeRecord(r);
+    const opts=suppliers().map(s=>'<option value="'+esc(s.id)+'" '+(String(s.id)===String(r.supplierId)?'selected':'')+'>'+esc(s.name||s.nombre||s.razonSocial||s.id)+'</option>').join('');
+    const html='<h2>Editar cuenta por pagar</h2>'+
+      '<p class="muted">Modifica los datos de la obligación. Los abonos registrados se conservan.</p>'+
+      '<div class="form">'+
+      '<div class="field"><label>Proveedor</label><select id="vap_edit_supplier"><option value="">Selecciona un proveedor</option>'+opts+'</select></div>'+
+      '<div class="field"><label>Factura / referencia</label><input id="vap_edit_invoice" value="'+esc(r.invoice||'')+'"></div>'+
+      '<div class="field"><label>Fecha de factura</label><input id="vap_edit_date" type="date" value="'+esc(r.fecha||'')+'"></div>'+
+      '<div class="field"><label>Fecha de vencimiento</label><input id="vap_edit_due" type="date" value="'+esc(r.vencimiento||'')+'"></div>'+
+      '<div class="field full"><label>Total de la factura</label><input id="vap_edit_total" type="number" min="'+esc(paid(r))+'" step="1" inputmode="numeric" value="'+esc(r.total)+'"></div>'+
+      '</div>'+
+      '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" id="vap_edit_cancel">Cancelar</button><button type="button" class="btn primary" id="vap_edit_save">Guardar cambios</button></div>';
+    if(typeof window.openModal!=='function')return;
+    window.openModal(html);
+    document.getElementById('vap_edit_cancel')?.addEventListener('click',closeModalSafe);
+    document.getElementById('vap_edit_save')?.addEventListener('click',()=>saveEditedPayable(idv));
+  }
+
+  function saveEditedPayable(idv){
+    const r=find(idv);if(!r)return;
+    normalizeRecord(r);
+    const oldSupplierId=r.supplierId;
+    const oldPending=pending(r);
+    const supplierId=document.getElementById('vap_edit_supplier')?.value||'';
+    const invoice=normalizeReference(document.getElementById('vap_edit_invoice')?.value||'');
+    const fecha=document.getElementById('vap_edit_date')?.value||'';
+    const due=document.getElementById('vap_edit_due')?.value||'';
+    const total=Math.max(0,Number(document.getElementById('vap_edit_total')?.value||0));
+    const abonado=paid(r);
+
+    if(!supplierId)return notify('Selecciona un proveedor.');
+    if(!invoice)return notify('Escribe el número de factura o referencia.');
+    if(!fecha)return notify('Indica la fecha de la factura.');
+    if(!due)return notify('Indica la fecha de vencimiento.');
+    if(total<=0)return notify('El total debe ser mayor que cero.');
+    if(total<abonado)return notify('El total no puede ser menor que lo ya abonado: '+money(abonado)+'.');
+
+    const newPending=Math.max(0,total-abonado);
+    const oldSupplier=suppliers().find(s=>String(s?.id)===String(oldSupplierId));
+    const newSupplier=suppliers().find(s=>String(s?.id)===String(supplierId));
+
+    if(r.supplierBalanceTracked!==false){
+      if(String(oldSupplierId)!==String(supplierId)){
+        if(oldSupplier)oldSupplier.balance=Math.max(0,Number(oldSupplier.balance||0)-oldPending);
+        if(newSupplier)newSupplier.balance=Number(newSupplier.balance||0)+newPending;
+      }else if(oldSupplier){
+        oldSupplier.balance=Math.max(0,Number(oldSupplier.balance||0)-oldPending+newPending);
+      }
+    }
+
+    r.supplierId=supplierId;
+    r.invoice=invoice;
+    r.fecha=fecha;
+    r.vencimiento=due;
+    r.total=total;
+    r.estado=calcState(r);
+
+    if(!persist())return;
+    closeModalSafe();
+    renderPayables();
+    notify('Cuenta por pagar actualizada correctamente.');
   }
 
   function viewPayable(idv){
