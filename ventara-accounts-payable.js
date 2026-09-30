@@ -56,7 +56,7 @@
       const proveedor=String(supplierName(r?.supplierId)||'').trim().toLowerCase();
       const factura=normalizeReference(r?.invoice);
       const total=Number(r?.total||0);
-      return !(proveedor.includes('truper') && factura==='9524' && (total===319 || total===319432));
+      return !(proveedor.includes('truper') && factura==='9524');
     });
     if(d.accountsPayable.length!==before){
       persist();
