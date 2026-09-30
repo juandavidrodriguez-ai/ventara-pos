@@ -293,7 +293,16 @@
     root.querySelectorAll('[data-vap-view]').forEach(b=>b.addEventListener('click',()=>viewPayable(b.getAttribute('data-vap-view'))));
     root.querySelectorAll('[data-vap-status]').forEach(s=>s.addEventListener('change',()=>changeStatus(s.getAttribute('data-vap-status'),s.value)));
     cleanupDuplicateDeleteButtons(root);
+    installDeleteDomGuard(root);
 
+  }
+
+  function installDeleteDomGuard(root){
+    if(!root || root.__ventaraDeleteDomGuard)return;
+    root.__ventaraDeleteDomGuard=true;
+    const observer=new MutationObserver(()=>cleanupDuplicateDeleteButtons(root));
+    observer.observe(root,{childList:true,subtree:true});
+    cleanupDuplicateDeleteButtons(root);
   }
 
   function cleanupDuplicateDeleteButtons(root){
