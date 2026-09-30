@@ -388,17 +388,12 @@
       '<div class="field"><label>Fecha de vencimiento</label><input id="vap_edit_due" type="date" value="'+esc(r.vencimiento||'')+'"></div>'+
       '<div class="field full"><label>Total de la factura</label><input id="vap_edit_total" type="number" min="'+esc(paid(r))+'" step="1" inputmode="numeric" value="'+esc(r.total)+'"></div>'+
       '</div>'+
-      '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" id="vap_edit_cancel">Cancelar</button><button type="button" class="btn primary" id="vap_edit_save">Guardar cambios</button></div>';
+      '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" id="vap_edit_cancel">Cancelar</button><button type="button" class="btn primary" id="vap_edit_save" onclick="window.__ventaraSaveEditedPayable('+JSON.stringify(idv)+')">Guardar cambios</button></div>';
     if(typeof window.openModal!=='function')return;
+    // El handler se publica antes de insertar el HTML: el botón queda con onclick directo.
+    window.__ventaraSaveEditedPayable=saveEditedPayable;
     window.openModal(html);
     document.getElementById('vap_edit_cancel')?.addEventListener('click',closeModalSafe);
-    // El botón de guardar queda enlazado directamente para evitar que otro listener global del POS intercepte el click.
-    window.__ventaraSaveEditedPayable=saveEditedPayable;
-    const saveBtn=document.getElementById('vap_edit_save');
-    if(saveBtn){
-      saveBtn.onclick=()=>window.__ventaraSaveEditedPayable(idv);
-      saveBtn.type='button';
-    }
   }
 
   function saveEditedPayable(idv){
