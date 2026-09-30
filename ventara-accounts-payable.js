@@ -594,6 +594,7 @@
   }
 
   function boot(){
+    purgeCorruptPayable();
     installRenderHook();
     if(!window[TAB_KEY])window[TAB_KEY]='suppliers';
     const root=document.getElementById(ROOT_ID);
