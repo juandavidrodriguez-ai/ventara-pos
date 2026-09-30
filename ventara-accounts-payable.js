@@ -4,6 +4,8 @@
  */
 (()=> {
   'use strict';
+  if(window.__VENTARA_ACCOUNTS_PAYABLE_SINGLETON__) return;
+  window.__VENTARA_ACCOUNTS_PAYABLE_SINGLETON__=true;
 
   const ROOT_ID='suppliers';
   const TAB_KEY='__ventaraPayablesView';
@@ -22,8 +24,8 @@
   const stateDb=()=>getDb();
   const suppliers=()=>Array.isArray(stateDb()?.suppliers)?stateDb().suppliers:[];
   const supplierName=(sid)=>{const s=suppliers().find(x=>String(x?.id)===String(sid));return s?.name||s?.nombre||s?.razonSocial||'Proveedor sin nombre'};
-  const pending=(r)=>Math.max(0,Number(r?.total||0)-Number(r?.abonado||0));
-  const paid=(r)=>Math.max(0,Number(r?.abonado||0));
+  const pending=(r)=>Math.max(0,parseMoneyInput(r?.total)-parseMoneyInput(r?.abonado));
+  const paid=(r)=>Math.max(0,parseMoneyInput(r?.abonado));
   const isPastDue=(r)=>!!r?.vencimiento && pending(r)>0 && String(r.vencimiento)<today();
 
   function calcState(r){
@@ -84,7 +86,7 @@
         !r?.sourcePurchaseId &&
         String(r?.supplierId||'')===String(p?.supplierId||'') &&
         String(r?.invoice||'')===String(p?.invoice||p?.number||'') &&
-        Number(r?.total||0)===Number(p?.total||0)
+        parseMoneyInput(r?.total)===parseMoneyInput(p?.total)
       );
       if(duplicate)return;
       d.accountsPayable.unshift({
@@ -93,7 +95,7 @@
         invoice:String(p.invoice||p.number||'').trim(),
         fecha:String(p.date||today()),
         vencimiento:'',
-        total:Number(p.total||0),
+        total:parseMoneyInput(p.total),
         abonado:0,
         abonos:[],
         estado:'Pendiente',
@@ -137,8 +139,8 @@
   function normalizeRecord(r){
     r.invoice=normalizeReference(r.invoice);
     r.fecha=normalizeDate(r.fecha);
-    r.total=Math.max(0,Number(r.total||0));
-    r.abonado=Math.min(r.total,Math.max(0,Number(r.abonado||0)));
+    r.total=Math.max(0,parseMoneyInput(r.total));
+    r.abonado=Math.min(r.total,Math.max(0,parseMoneyInput(r.abonado)));
     r.abonos=Array.isArray(r.abonos)?r.abonos:[];
     r.estado=calcState(r);
     return r;
@@ -203,6 +205,7 @@
   function renderPayables(){
     const root=document.getElementById(ROOT_ID); if(!root)return;
     const d=ensureArray(); if(!d)return;
+    root.querySelectorAll('[data-vap-delete]').forEach((b)=>{ const row=b.closest('tr'); if(row){ const bs=row.querySelectorAll('[data-vap-delete]'); bs.forEach((x,i)=>{if(i>0)x.remove()}); }});
     if(seedFromCreditPurchases())persist();
     // Evita que la compra histórica vuelva a regenerar el registro eliminado.
     purgeTruper9524();
