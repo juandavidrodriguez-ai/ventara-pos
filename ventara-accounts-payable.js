@@ -201,7 +201,6 @@
         '<td><div class="actions" style="gap:5px">'+
           (pending(r)>0?'<button type="button" class="btn sm success" data-vap-payall="'+esc(r.id)+'">Pagar todo</button>':'')+
           '<button type="button" class="btn sm" data-vap-view="'+esc(r.id)+'">Ver</button>'+
-          '<button type="button" class="btn sm" data-vap-edit="'+esc(r.id)+'">Editar</button>'+
         '</div></td>'+
       '</tr>';
     }).join('');
@@ -243,7 +242,6 @@
     root.querySelectorAll('[data-vap-abono]').forEach(b=>b.addEventListener('click',()=>openPaymentModal(b.getAttribute('data-vap-abono'))));
     root.querySelectorAll('[data-vap-payall]').forEach(b=>b.addEventListener('click',()=>payAll(b.getAttribute('data-vap-payall'))));
     root.querySelectorAll('[data-vap-view]').forEach(b=>b.addEventListener('click',()=>viewPayable(b.getAttribute('data-vap-view'))));
-    root.querySelectorAll('[data-vap-edit]').forEach(b=>b.addEventListener('click',()=>openEditPayableModal(b.getAttribute('data-vap-edit'))));
     root.querySelectorAll('[data-vap-status]').forEach(s=>s.addEventListener('change',()=>changeStatus(s.getAttribute('data-vap-status'),s.value)));
   }
 
