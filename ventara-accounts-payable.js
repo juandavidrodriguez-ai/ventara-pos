@@ -34,6 +34,18 @@
     return 'Pendiente';
   }
 
+  function purgeCorruptPayable(){
+    const d=ensureArray();
+    if(!d)return false;
+    const before=d.accountsPayable.length;
+    d.accountsPayable=d.accountsPayable.filter(r=>!(Number(r?.total)===319 && String(r?.invoice??'').includes('1007')));
+    if(d.accountsPayable.length!==before){
+      persist();
+      return true;
+    }
+    return false;
+  }
+
   function ensureArray(){
     const d=stateDb(); if(!d)return null;
     d.accountsPayable=Array.isArray(d.accountsPayable)?d.accountsPayable:[];
