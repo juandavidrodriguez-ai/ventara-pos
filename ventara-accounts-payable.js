@@ -14,7 +14,7 @@
   const notify=(m)=>{try{if(typeof window.toast==='function')window.toast(String(m));else alert(String(m))}catch(_){}};
   const esc=(v)=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   // Factura/referencia no es dinero: no usar separadores de miles. Acepta también registros antiguos como 2.227.
-  const normalizeReference=(v)=>{const s=String(v??'').trim();return /^\d[\d\s.,]*$/.test(s)?s.replace(/[\s.,]/g,''):s};
+  const normalizeReference=(v)=>{const s=String(v??'').trim();return /^\d[\d\s.,]*$/.test(s)?s.replace(/[\s.,]/g,''):s.replace(/(?<=\d)[.,](?=\d)/g,'')};
   const normalizeDate=(v)=>String(v??'').trim().replace(/^(\d)\.(\d{3})-(\d{2})-(\d{2})$/,'$1$2-$3-$4');
   const money=(v)=>{const n=Number(v||0);return '$ '+new Intl.NumberFormat('es-CO',{maximumFractionDigits:0}).format(Number.isFinite(n)?n:0)};
   const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
@@ -276,7 +276,7 @@
       '</div>'+
       '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button type="button" class="btn primary" id="vap_save">Guardar cuenta</button></div>';
     if(typeof window.openModal==='function')window.openModal(html);else return;
-    document.getElementById('vap_save')?.addEventListener('click',savePayable);
+    document.getElementById('vap_save')?.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();savePayable(e);});
   }
 
   function savePayable(e){
@@ -286,7 +286,8 @@
     const invoice=normalizeReference(document.getElementById('vap_invoice')?.value||'');
     const fecha=document.getElementById('vap_date')?.value||today();
     const due=document.getElementById('vap_due')?.value||'';
-    const total=Math.max(0,parseMoneyInput(document.getElementById('vap_total')?.value||0));
+    const rawTotal=document.getElementById('vap_total')?.value||0;
+    const total=Math.max(0,parseMoneyInput(rawTotal));
     if(!supplierId)return notify('Selecciona un proveedor.');
     if(!invoice)return notify('Escribe el número de factura o referencia.');
     if(!fecha)return notify('Indica la fecha de la factura.');
@@ -407,7 +408,7 @@
     const invoice=normalizeReference(document.getElementById('vap_edit_invoice')?.value||'');
     const fecha=document.getElementById('vap_edit_date')?.value||'';
     const due=document.getElementById('vap_edit_due')?.value||'';
-    const total=Math.max(0,Number(document.getElementById('vap_edit_total')?.value||0));
+    const total=Math.max(0,parseMoneyInput(document.getElementById('vap_edit_total')?.value||0));
     const abonado=paid(r);
 
     if(!supplierId)return notify('Selecciona un proveedor.');
@@ -496,7 +497,8 @@
     const idx=d.accountsPayable.findIndex(r=>String(r?.id)===String(idv));
     if(idx<0)return notify('No se encontró la cuenta por pagar.');
     const r=d.accountsPayable[idx];
-    if(!confirm('¿Está seguro de eliminar la cuenta por pagar: '+(r.invoice||'este registro')+'?'))return;
+    const proveedor=supplierName(r.supplierId);
+    if(!confirm('¿Está seguro de eliminar la cuenta por pagar de: '+proveedor+'?'))return;
     const supplier=suppliers().find(s=>String(s?.id)===String(r.supplierId));
     if(supplier && r.supplierBalanceTracked!==false){
       supplier.balance=Math.max(0,Number(supplier.balance||0)-pending(r));
@@ -536,10 +538,14 @@
       if(!target)return;
       const texto=(target.textContent||target.value||'').trim().toLowerCase();
 
-      if(target.classList.contains('btn-danger') || target.classList.contains('btn-eliminar-rojo') || (texto==='eliminar' && target.closest('[data-vap-delete]')) || target.getAttribute('data-action')==='delete'){
-        const idv=target.getAttribute('data-vap-delete');
+      const isPayableDelete=!!target.closest('[data-vap-delete]') &&
+        (texto==='eliminar' || target.classList.contains('btn-danger') || target.classList.contains('btn-eliminar-rojo') || target.getAttribute('data-action')==='delete');
+      if(isPayableDelete){
+        const btn=target.closest('[data-vap-delete]');
+        const idv=btn?.getAttribute('data-vap-delete');
         if(!idv)return;
         e.preventDefault();
+        e.stopPropagation();
         e.stopImmediatePropagation();
         deletePayable(idv);
         return;
