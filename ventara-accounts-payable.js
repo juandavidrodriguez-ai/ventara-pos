@@ -181,6 +181,18 @@
       if(oldInvoice!==String(r?.invoice??'') || oldFecha!==String(r?.fecha??'')) normalizedChanged=true;
     });
     if(normalizedChanged)persist();
+    // Corrección de datos históricos: una captura anterior truncó 319,432 a 319 en esta factura concreta.
+    d.accountsPayable.forEach(r=>{
+      const ref=normalizeReference(r?.invoice);
+      const proveedor=String(supplierName(r?.supplierId)||'').trim().toLowerCase();
+      if(ref==='9524' && proveedor.includes('truper') && Number(r?.total)===319){
+        r.total=319432;
+        r.abonado=Math.min(319432,Math.max(0,Number(r?.abonado)||0));
+        r.estado=calcState(r);
+        normalizedChanged=true;
+      }
+    });
+    if(normalizedChanged)persist();
     const t=totals(d.accountsPayable);
     window[TAB_KEY]='payables';
 
@@ -201,7 +213,7 @@
         '<td><div class="actions" style="gap:5px">'+
           (pending(r)>0?'<button type="button" class="btn sm success" data-vap-payall="'+esc(r.id)+'">Pagar todo</button>':'')+
           '<button type="button" class="btn sm" data-vap-view="'+esc(r.id)+'">Ver</button>'+
-          '<button type="button" class="btn sm btn-danger btn-eliminar-rojo" data-action="delete" data-vap-delete="'+esc(r.id)+'">Eliminar</button>'+
+          '<button type="button" class="btn btn-danger btn-sm btn-eliminar" data-action="delete" data-vap-delete="'+esc(r.id)+'">Eliminar</button>'+
         '</div></td>'+
       '</tr>';
     }).join('');
@@ -244,6 +256,23 @@
     root.querySelectorAll('[data-vap-payall]').forEach(b=>b.addEventListener('click',()=>payAll(b.getAttribute('data-vap-payall'))));
     root.querySelectorAll('[data-vap-view]').forEach(b=>b.addEventListener('click',()=>viewPayable(b.getAttribute('data-vap-view'))));
     root.querySelectorAll('[data-vap-status]').forEach(s=>s.addEventListener('change',()=>changeStatus(s.getAttribute('data-vap-status'),s.value)));
+    cleanupDuplicateDeleteButtons(root);
+
+  }
+
+  function cleanupDuplicateDeleteButtons(root){
+    root.querySelectorAll('[data-vap-body] tr').forEach(row=>{
+      const actionCell=row.lastElementChild;
+      if(!actionCell)return;
+      const deletes=Array.from(actionCell.querySelectorAll('button, a')).filter(b=>(b.textContent||b.value||'').trim().toLowerCase()==='eliminar' || b.classList.contains('btn-eliminar'));
+      if(!deletes.length)return;
+      deletes.slice(1).forEach(b=>b.remove());
+      const keep=deletes[0];
+      keep.classList.remove('btn-eliminar-rojo');
+      keep.classList.add('btn','btn-danger','btn-sm','btn-eliminar');
+      keep.setAttribute('type','button');
+      keep.setAttribute('data-action','delete');
+    });
   }
 
   function applyFilters(){
@@ -538,10 +567,9 @@
       if(!target)return;
       const texto=(target.textContent||target.value||'').trim().toLowerCase();
 
-      const isPayableDelete=!!target.closest('[data-vap-delete]') &&
-        (texto==='eliminar' || target.classList.contains('btn-danger') || target.classList.contains('btn-eliminar-rojo') || target.getAttribute('data-action')==='delete');
+      const isPayableDelete=target.classList.contains('btn-eliminar') || target.classList.contains('btn-danger') || target.getAttribute('data-action')==='delete' || texto==='eliminar';
       if(isPayableDelete){
-        const btn=target.closest('[data-vap-delete]');
+        const btn=target.closest('[data-vap-delete]') || target;
         const idv=btn?.getAttribute('data-vap-delete');
         if(!idv)return;
         e.preventDefault();
