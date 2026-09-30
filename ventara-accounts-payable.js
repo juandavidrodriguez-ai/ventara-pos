@@ -311,7 +311,7 @@
     const html='<h2>Registrar abono</h2>'+
       '<div class="card" style="margin-bottom:14px;background:#f8fafc"><div class="muted">Proveedor</div><b>'+esc(supplierName(r.supplierId))+'</b><div style="display:flex;justify-content:space-between;margin-top:10px"><span>Saldo actual</span><b>'+money(saldo)+'</b></div></div>'+
       '<div class="form">'+
-      '<div class="field full"><label>¿Cuánto desea abonar?</label><input id="vap_payment_amount" type="number" min="1" max="'+esc(saldo)+'" step="1" inputmode="numeric" value="'+esc(saldo)+'"></div>'+
+      '<div class="field full"><label>¿Cuánto desea abonar?</label><input id="vap_payment_amount" type="text" inputmode="numeric" autocomplete="off" value="'+esc(saldo)+'"></div>'+
       '<div class="field"><label>Fecha de pago</label><input id="vap_payment_date" type="date" value="'+today()+'"></div>'+
       '<div class="field"><label>Método de pago</label><select id="vap_payment_method"><option>Efectivo</option><option>Transferencia</option><option>Consignación</option><option>Cheque</option><option>Otro</option></select></div>'+
       '</div>'+
