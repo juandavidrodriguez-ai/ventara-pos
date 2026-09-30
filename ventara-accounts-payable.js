@@ -392,7 +392,13 @@
     if(typeof window.openModal!=='function')return;
     window.openModal(html);
     document.getElementById('vap_edit_cancel')?.addEventListener('click',closeModalSafe);
-    document.getElementById('vap_edit_save')?.addEventListener('click',()=>saveEditedPayable(idv));
+    // El botón de guardar queda enlazado directamente para evitar que otro listener global del POS intercepte el click.
+    window.__ventaraSaveEditedPayable=saveEditedPayable;
+    const saveBtn=document.getElementById('vap_edit_save');
+    if(saveBtn){
+      saveBtn.onclick=()=>window.__ventaraSaveEditedPayable(idv);
+      saveBtn.type='button';
+    }
   }
 
   function saveEditedPayable(idv){
@@ -434,9 +440,23 @@
     r.total=total;
     r.estado=calcState(r);
 
-    if(!persist())return;
+    // Guardado inmediato: primero persiste el estado local y luego sincroniza la nube.
+    try{
+      if(typeof window.localSave==='function')window.localSave();
+      else if(typeof window.save==='function')window.save();
+      else throw new Error('No existe una función de guardado disponible.');
+    }catch(e){
+      console.error('[VENTARA] error guardando edición de cuenta por pagar',e);
+      notify('No se pudo guardar la cuenta por pagar.');
+      return;
+    }
     closeModalSafe();
     renderPayables();
+    try{
+      if(typeof window.cloudSave==='function'){
+        Promise.resolve(window.cloudSave()).catch(e=>console.error('[VENTARA] sincronización cloud de cuenta por pagar',e));
+      }
+    }catch(e){console.error('[VENTARA] sincronización cloud de cuenta por pagar',e)}
     notify('Cuenta por pagar actualizada correctamente.');
   }
 
