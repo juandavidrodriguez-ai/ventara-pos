@@ -46,6 +46,25 @@
     return false;
   }
 
+  // Eliminación quirúrgica del registro histórico de Truper 95/24.
+  // También lo elimina si vuelve a entrar desde una compra migrada.
+  function purgeTruper9524(){
+    const d=ensureArray();
+    if(!d)return false;
+    const before=d.accountsPayable.length;
+    d.accountsPayable=d.accountsPayable.filter(r=>{
+      const proveedor=String(supplierName(r?.supplierId)||'').trim().toLowerCase();
+      const factura=normalizeReference(r?.invoice);
+      const total=Number(r?.total||0);
+      return !(proveedor.includes('truper') && factura==='9524' && (total===319 || total===319432));
+    });
+    if(d.accountsPayable.length!==before){
+      persist();
+      return true;
+    }
+    return false;
+  }
+
   function ensureArray(){
     const d=stateDb(); if(!d)return null;
     d.accountsPayable=Array.isArray(d.accountsPayable)?d.accountsPayable:[];
@@ -185,6 +204,8 @@
     const root=document.getElementById(ROOT_ID); if(!root)return;
     const d=ensureArray(); if(!d)return;
     if(seedFromCreditPurchases())persist();
+    // Evita que la compra histórica vuelva a regenerar el registro eliminado.
+    purgeTruper9524();
     let normalizedChanged=false;
     d.accountsPayable.forEach(r=>{
       const oldInvoice=String(r?.invoice??'');
@@ -607,6 +628,7 @@
 
   function boot(){
     purgeCorruptPayable();
+    purgeTruper9524();
     installRenderHook();
     if(!window[TAB_KEY])window[TAB_KEY]='suppliers';
     const root=document.getElementById(ROOT_ID);
