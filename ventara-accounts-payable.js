@@ -201,7 +201,7 @@
         '<td><div class="actions" style="gap:5px">'+
           (pending(r)>0?'<button type="button" class="btn sm success" data-vap-payall="'+esc(r.id)+'">Pagar todo</button>':'')+
           '<button type="button" class="btn sm" data-vap-view="'+esc(r.id)+'">Ver</button>'+
-          '<button type="button" class="btn sm danger btn-eliminar" data-action="delete" data-vap-delete="'+esc(r.id)+'">Eliminar</button>'+
+          '<button type="button" class="btn sm btn-danger btn-eliminar-rojo" data-action="delete" data-vap-delete="'+esc(r.id)+'">Eliminar</button>'+
         '</div></td>'+
       '</tr>';
     }).join('');
@@ -233,7 +233,7 @@
       if(typeof window.renderSuppliers==='function')window.renderSuppliers();
     });
     root.querySelector('.head .actions')?.prepend(back);
-    root.querySelector('[data-vap-new]')?.addEventListener('click',openPayableModal);
+    root.querySelector('[data-vap-new]')?.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();openPayableModal(e);});
     root.querySelector('[data-vap-search]')?.addEventListener('input',applyFilters);
     root.querySelector('[data-vap-filter-state]')?.addEventListener('change',applyFilters);
     root.querySelector('[data-vap-clear]')?.addEventListener('click',()=>{
@@ -272,20 +272,21 @@
       '<div class="field"><label>Factura / referencia</label><input id="vap_invoice" placeholder="Ej. FAC-1258"></div>'+
       '<div class="field"><label>Fecha de factura</label><input id="vap_date" type="date" value="'+today()+'"></div>'+
       '<div class="field"><label>Fecha de vencimiento</label><input id="vap_due" type="date"></div>'+
-      '<div class="field full"><label>Total de la factura</label><input id="vap_total" type="number" min="0" step="1" inputmode="numeric" placeholder="500000"></div>'+
+      '<div class="field full"><label>Total de la factura</label><input id="vap_total" type="text" inputmode="numeric" autocomplete="off" placeholder="500000"></div>'+
       '</div>'+
       '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button type="button" class="btn primary" id="vap_save">Guardar cuenta</button></div>';
     if(typeof window.openModal==='function')window.openModal(html);else return;
     document.getElementById('vap_save')?.addEventListener('click',savePayable);
   }
 
-  function savePayable(){
+  function savePayable(e){
+    if(e){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.();}
     const d=ensureArray();if(!d)return;
     const supplierId=document.getElementById('vap_supplier')?.value||'';
     const invoice=normalizeReference(document.getElementById('vap_invoice')?.value||'');
     const fecha=document.getElementById('vap_date')?.value||today();
     const due=document.getElementById('vap_due')?.value||'';
-    const total=Math.max(0,Number(document.getElementById('vap_total')?.value||0));
+    const total=Math.max(0,parseMoneyInput(document.getElementById('vap_total')?.value||0));
     if(!supplierId)return notify('Selecciona un proveedor.');
     if(!invoice)return notify('Escribe el número de factura o referencia.');
     if(!fecha)return notify('Indica la fecha de la factura.');
@@ -319,10 +320,11 @@
     if(typeof window.openModal!=='function')return;
     window.openModal(html);
     document.getElementById('vap_pay_cancel')?.addEventListener('click',closeModalSafe);
-    document.getElementById('vap_pay_save')?.addEventListener('click',()=>registerPayment(idv));
+    document.getElementById('vap_pay_save')?.addEventListener('click',(e)=>registerPayment(idv,e));
   }
 
-  function registerPayment(idv){
+  function registerPayment(idv,e){
+    if(e){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.();}
     const r=find(idv);if(!r)return;
     normalizeRecord(r);
     const saldo=pending(r);
@@ -507,13 +509,34 @@
     notify('Registro eliminado correctamente.');
   }
 
+  // Intercepción aislada: solo formularios propios de Cuentas por pagar.
+  // No toca formularios de Login, Ventas, Compras ni otros módulos.
+  if(!window.__ventaraPayablesSubmitGuard){
+    document.addEventListener('submit',function(e){
+      const form=e.target;
+      if(!form || !form.matches || !form.matches('form'))return;
+      const isNewPayable=!!form.querySelector('#vap_supplier, #vap_invoice, #vap_total');
+      const paymentInput=form.querySelector('#vap_payment_amount, #montoAbono, input[name="montoAbono"]');
+      const isPayment=!!paymentInput;
+      if(!isNewPayable && !isPayment)return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation?.();
+      if(isNewPayable){savePayable(e);return;}
+      const submitter=e.submitter;
+      const idv=submitter?.getAttribute('data-vap-id') || document.querySelector('#vap_pay_save')?.getAttribute('data-vap-id');
+      if(idv)registerPayment(idv,e);
+    },true);
+    window.__ventaraPayablesSubmitGuard=true;
+  }
+
   if(!window.__ventaraPayablesGlobalClick){
     document.addEventListener('click',function(e){
       const target=e.target?.closest?.('button, a, input[type="button"]');
       if(!target)return;
       const texto=(target.textContent||target.value||'').trim().toLowerCase();
 
-      if(texto==='eliminar' || target.classList.contains('btn-eliminar') || target.getAttribute('data-action')==='delete'){
+      if(target.classList.contains('btn-danger') || target.classList.contains('btn-eliminar-rojo') || (texto==='eliminar' && target.closest('[data-vap-delete]')) || target.getAttribute('data-action')==='delete'){
         const idv=target.getAttribute('data-vap-delete');
         if(!idv)return;
         e.preventDefault();
