@@ -77,7 +77,25 @@
   }
 
   function persist(){
-    try{if(typeof window.save==='function')window.save();else if(typeof window.localSave==='function')window.localSave();return true}catch(e){console.error('[VENTARA] cuentas por pagar save',e);notify('No se pudo guardar la cuenta por pagar.');return false}
+    try{
+      if(typeof window.saveDb==='function'){
+        window.saveDb();
+      }else if(typeof window.save==='function'){
+        window.save();
+      }else if(typeof window.localSave==='function'){
+        window.localSave();
+      }
+      try{
+        if(typeof window.cloudSave==='function'){
+          Promise.resolve(window.cloudSave()).catch(e=>console.warn('[VENTARA] cuentas por pagar cloud save',e));
+        }
+      }catch(e){console.warn('[VENTARA] cuentas por pagar cloud save',e)}
+      return true;
+    }catch(e){
+      console.error('[VENTARA] cuentas por pagar save',e);
+      notify('No se pudo guardar la cuenta por pagar.');
+      return false;
+    }
   }
 
   function stateBadge(state){
