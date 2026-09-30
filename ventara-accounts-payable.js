@@ -201,6 +201,7 @@
         '<td><div class="actions" style="gap:5px">'+
           (pending(r)>0?'<button type="button" class="btn sm success" data-vap-payall="'+esc(r.id)+'">Pagar todo</button>':'')+
           '<button type="button" class="btn sm" data-vap-view="'+esc(r.id)+'">Ver</button>'+
+          '<button type="button" class="btn sm danger btn-eliminar" data-action="delete" data-vap-delete="'+esc(r.id)+'">Eliminar</button>'+
         '</div></td>'+
       '</tr>';
     }).join('');
@@ -314,7 +315,7 @@
       '<div class="field"><label>Fecha de pago</label><input id="vap_payment_date" type="date" value="'+today()+'"></div>'+
       '<div class="field"><label>Método de pago</label><select id="vap_payment_method"><option>Efectivo</option><option>Transferencia</option><option>Consignación</option><option>Cheque</option><option>Otro</option></select></div>'+
       '</div>'+
-      '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" id="vap_pay_cancel">Cancelar</button><button type="button" class="btn success" id="vap_pay_save">Registrar abono</button></div>';
+      '<div class="actions" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" id="vap_pay_cancel">Cancelar</button><button type="button" class="btn success" id="vap_pay_save" data-vap-id="'+esc(idv)+'">Registrar abono</button></div>';
     if(typeof window.openModal!=='function')return;
     window.openModal(html);
     document.getElementById('vap_pay_cancel')?.addEventListener('click',closeModalSafe);
@@ -325,12 +326,13 @@
     const r=find(idv);if(!r)return;
     normalizeRecord(r);
     const saldo=pending(r);
-    const amount=Number(document.getElementById('vap_payment_amount')?.value||0);
+    const amount=parseMoneyInput(document.getElementById('vap_payment_amount')?.value||0);
     const date=document.getElementById('vap_payment_date')?.value||today();
     const method=document.getElementById('vap_payment_method')?.value||'Efectivo';
     if(amount<=0)return notify('El abono debe ser mayor que cero.');
     if(amount>saldo)return notify('El abono no puede superar el saldo pendiente de '+money(saldo)+'.');
-    r.abonos.push({id:id('ab'),fecha:date,importe:amount,metodo:method,createdBy:window.currentUser?.id||null});
+    const fechaHora=new Date().toLocaleString('es-CO');
+    r.abonos.push({id:id('ab'),fecha:date,fechaHora,importe:amount,valorAbonado:amount,saldoRestante:Math.max(0,saldo-amount),metodo:method,createdBy:window.currentUser?.id||null});
     r.abonado=Math.min(r.total,paid(r)+amount);
     const supplier=suppliers().find(s=>String(s?.id)===String(r.supplierId));
     if(supplier && r.supplierBalanceTracked!==false)supplier.balance=Math.max(0,Number(supplier.balance||0)-amount);
@@ -338,7 +340,7 @@
     if(!persist())return;
     closeModalSafe();
     renderPayables();
-    notify(r.estado==='Pagado'?'Factura pagada completamente.':'Abono registrado correctamente.');
+    notify((r.estado==='Pagado'?'Factura pagada completamente.':'Abono registrado correctamente.')+' Fecha y hora: '+fechaHora+' | Abonado: '+money(amount)+' | Saldo restante: '+money(pending(r)));
   }
 
   function payAll(idv){
@@ -476,6 +478,62 @@
     if(typeof window.openModal!=='function')return;
     window.openModal(html);
     document.getElementById('vap_detail_pay')?.addEventListener('click',()=>{closeModalSafe();setTimeout(()=>openPaymentModal(idv),0)});
+  }
+
+  // Parseo monetario robusto: 319432 y 319,432 significan $319.432.
+  function parseMoneyInput(value){
+    const raw=String(value??'').trim();
+    if(!raw)return 0;
+    const cleaned=raw.replace(/,/g,'').replace(/\./g,'').replace(/[^0-9-]/g,'');
+    return Number(cleaned)||0;
+  }
+
+  function deletePayable(idv){
+    const d=ensureArray();
+    if(!d)return;
+    const idx=d.accountsPayable.findIndex(r=>String(r?.id)===String(idv));
+    if(idx<0)return notify('No se encontró la cuenta por pagar.');
+    const r=d.accountsPayable[idx];
+    if(!confirm('¿Está seguro de eliminar la cuenta por pagar: '+(r.invoice||'este registro')+'?'))return;
+    const supplier=suppliers().find(s=>String(s?.id)===String(r.supplierId));
+    if(supplier && r.supplierBalanceTracked!==false){
+      supplier.balance=Math.max(0,Number(supplier.balance||0)-pending(r));
+    }
+    d.accountsPayable.splice(idx,1);
+    if(!persist())return;
+    const row=document.querySelector('[data-vap-delete="'+CSS.escape(String(idv))+'"]')?.closest('tr');
+    if(row)row.remove();
+    renderPayables();
+    notify('Registro eliminado correctamente.');
+  }
+
+  if(!window.__ventaraPayablesGlobalClick){
+    document.addEventListener('click',function(e){
+      const target=e.target?.closest?.('button, a, input[type="button"]');
+      if(!target)return;
+      const texto=(target.textContent||target.value||'').trim().toLowerCase();
+
+      if(texto==='eliminar' || target.classList.contains('btn-eliminar') || target.getAttribute('data-action')==='delete'){
+        const idv=target.getAttribute('data-vap-delete');
+        if(!idv)return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        deletePayable(idv);
+        return;
+      }
+
+      if(texto.includes('guardar abono') || texto.includes('confirmar abono')){
+        const amountInput=document.querySelector('#vap_payment_amount, #montoAbono, input[name="montoAbono"]');
+        if(!amountInput)return;
+        const idv=target.getAttribute('data-vap-id');
+        if(idv){
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          registerPayment(idv);
+        }
+      }
+    },true);
+    window.__ventaraPayablesGlobalClick=true;
   }
 
   function boot(){
