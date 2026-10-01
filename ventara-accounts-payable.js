@@ -543,7 +543,13 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,900),{once:true});
   else setTimeout(boot,900);
 
-  setInterval(installRenderHook,1200);
+  setInterval(()=>{
+    installRenderHook();
+    try{
+      const root=document.getElementById(ROOT_ID);
+      if(root && root.classList.contains('active')) renderSupplierPayablesButton(root);
+    }catch(e){console.warn('[VENTARA] payables button ensure',e)}
+  },700);
 
   // El botón [data-vap-open] ya tiene su propio listener.
   // No instalar otro listener global para evitar doble ejecución al abrir el módulo.
