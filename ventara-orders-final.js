@@ -146,7 +146,7 @@ document.addEventListener('click',function(e){
   ventaraMostrarAbonoForm(fila,info);
 },true);
 
-function ventaraAbonoWatch(){ventaraAgregarConsultar();const receivables=document.getElementById('receivables');if(receivables&&!window.__ventaraAbonoObserver){window.__ventaraAbonoObserver=true;new MutationObserver(()=>ventaraAgregarConsultar()).observe(receivables,{childList:true,subtree:true)}}}
+function ventaraAbonoWatch(){ventaraAgregarConsultar();const receivables=document.getElementById('receivables');if(receivables&&!window.__ventaraAbonoObserver){window.__ventaraAbonoObserver=true;new MutationObserver(()=>ventaraAgregarConsultar()).observe(receivables,{childList:true,subtree:true})}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ventaraAbonoWatch,{once:true});else ventaraAbonoWatch();
 
 })();
