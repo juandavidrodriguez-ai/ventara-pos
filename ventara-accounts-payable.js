@@ -172,15 +172,10 @@
   function renderPayables(){
     const root=document.getElementById(ROOT_ID); if(!root)return;
     const d=ensureArray(); if(!d)return;
-    if(seedFromCreditPurchases())persist();
-    let normalizedChanged=false;
-    d.accountsPayable.forEach(r=>{
-      const oldInvoice=String(r?.invoice??'');
-      const oldFecha=String(r?.fecha??'');
-      normalizeRecord(r);
-      if(oldInvoice!==String(r?.invoice??'') || oldFecha!==String(r?.fecha??'')) normalizedChanged=true;
-    });
-    if(normalizedChanged)persist();
+    // IMPORTANTE: el render debe ser de solo lectura.
+    // No guardar/migrar datos mientras se está pintando la pantalla:
+    // saveDb()/save() puede volver a renderizar Proveedores y provocar un ciclo.
+    d.accountsPayable.forEach(r=>normalizeRecord(r));
     const t=totals(d.accountsPayable);
     window[TAB_KEY]='payables';
 
@@ -548,19 +543,8 @@
 
   setInterval(installRenderHook,1200);
 
-  // Navegación robusta: el botón de Proveedores no depende del render del módulo principal.
-  const openPayablesFromButton=(ev)=>{
-    const b=ev?.target?.closest?.('[data-vap-open]');
-    if(!b)return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    window[TAB_KEY]='payables';
-    try{renderPayables()}catch(e){console.error('[VENTARA] open payables',e);notify('No se pudo abrir Cuentas por pagar.')}
-  };
-  if(!window.__ventaraPayablesClickHook){
-    document.addEventListener('click',openPayablesFromButton,true);
-    window.__ventaraPayablesClickHook=true;
-  }
+  // El botón [data-vap-open] ya tiene su propio listener.
+  // No instalar otro listener global para evitar doble ejecución al abrir el módulo.
   window.openVentaraPayables=()=>{window[TAB_KEY]='payables';renderPayables()};
   window.ventaraAccountsPayable={render:renderPayables,openNew:openPayableModal,registerPayment:openPaymentModal,find};
 })();
