@@ -219,7 +219,7 @@
         (d.accountsPayable.length?'':'<div class="empty">No hay cuentas por pagar registradas.</div>')+
       '</div>';
 
-    const back=document.createElement('button');
+    installDeleteButtonCleanup(root);\n\n    const back=document.createElement('button');
     back.type='button';
     back.className='btn';
     back.textContent='← Proveedores';
@@ -241,7 +241,7 @@
     root.querySelectorAll('[data-vap-status]').forEach(s=>s.addEventListener('change',()=>changeStatus(s.getAttribute('data-vap-status'),s.value)));
   }
 
-  function applyFilters(){
+  // Evita que otro render/patch deje un segundo botón gris "Eliminar".\n  // Conservamos exclusivamente el botón rojo funcional de Cuentas por pagar.\n  function hideDuplicateDeleteButtons(root){\n    if(!root)return;\n    const buttons=Array.from(root.querySelectorAll('button')).filter(b=>String(b.textContent||'').trim().toLowerCase()==='eliminar');\n    if(buttons.length<=1)return;\n    const red=buttons.find(b=>b.classList.contains('danger') || b.classList.contains('btn-eliminar'));\n    buttons.forEach(b=>{\n      if(b!==red){\n        b.style.display='none';\n        b.setAttribute('aria-hidden','true');\n      }\n    });\n  }\n\n  function installDeleteButtonCleanup(root){\n    if(!root || root.__ventaraDeleteCleanup)return;\n    root.__ventaraDeleteCleanup=true;\n    hideDuplicateDeleteButtons(root);\n    try{\n      const observer=new MutationObserver(()=>hideDuplicateDeleteButtons(root));\n      observer.observe(root,{childList:true,subtree:true});\n      root.__ventaraDeleteCleanupObserver=observer;\n    }catch(e){console.warn('[VENTARA] delete button cleanup',e)}\n  }\n\n  function applyFilters(){
     const root=document.getElementById(ROOT_ID);if(!root)return;
     const qRaw=String(root.querySelector('[data-vap-search]')?.value||'').trim().toLowerCase();
     const q=normalizeReference(qRaw);
