@@ -196,7 +196,7 @@
         '<td><div class="actions" style="gap:5px">'+
           (pending(r)>0?'<button type="button" class="btn sm success" data-vap-payall="'+esc(r.id)+'">Pagar todo</button>':'')+
           '<button type="button" class="btn sm" data-vap-view="'+esc(r.id)+'">Ver</button>'+
-          '<button type="button" class="btn sm danger btn-eliminar" data-action="delete" data-vap-delete="'+esc(r.id)+'">Eliminar</button>'+
+          '<button type="button" class="btn btn-danger btn-sm btn-eliminar" data-action="delete" data-vap-delete="'+esc(r.id)+'">Eliminar</button>'+
         '</div></td>'+
       '</tr>';
     }).join('');
@@ -219,7 +219,7 @@
         (d.accountsPayable.length?'':'<div class="empty">No hay cuentas por pagar registradas.</div>')+
       '</div>';
 
-    installDeleteButtonCleanup(root);
+    installDeleteButtonCleanup(root);\n    removeGrayDeleteButtons();
 
     const back=document.createElement('button');
     back.type='button';
@@ -243,7 +243,7 @@
     root.querySelectorAll('[data-vap-status]').forEach(s=>s.addEventListener('change',()=>changeStatus(s.getAttribute('data-vap-status'),s.value)));
   }
 
-  // Evita que otro render/patch deje un segundo botón gris "Eliminar".
+  // Seguridad quirúrgica: ocultar/eliminar cualquier Eliminar gris duplicado.\n  if(!document.getElementById('vap-hide-gray-btn')){\n    const style=document.createElement('style');\n    style.id='vap-hide-gray-btn';\n    style.textContent='.actions button:not(.btn-danger):not(.btn-success):not([data-vap-view]):not([data-vap-abono]){display:none !important;}';\n    document.head.appendChild(style);\n  }\n\n  function removeGrayDeleteButtons(){\n    document.querySelectorAll('.actions button').forEach(btn=>{\n      const text=String(btn.textContent||'').trim().toLowerCase();\n      if(text==='eliminar' && !btn.classList.contains('btn-danger')) btn.remove();\n    });\n  }\n\n  // Evita que otro render/patch deje un segundo botón gris "Eliminar".
   // Conservamos exclusivamente el botón rojo funcional de Cuentas por pagar.
   function hideDuplicateDeleteButtons(root){
     if(!root)return;
