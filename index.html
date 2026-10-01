@@ -226,8 +226,44 @@ function printCreditConsolidated(clientId){
 
 function viewCreditInvoice(id){let s=(db.sales||[]).find(x=>x.id===id);if(!s)return toast('Factura no encontrada');let c=db.clients.find(x=>x.id===s.clientId)||{};let subtotal=(s.items||[]).reduce((a,i)=>a+(Number(i.qty)||0)*(Number(i.price)||0),0);let rows=(s.items||[]).map(i=>`<tr><td>${i.name||'Producto'}</td><td style="text-align:center">${i.qty||0}</td><td style="text-align:right">${money(i.price||0)}</td><td style="text-align:right">${money((Number(i.qty)||0)*(Number(i.price)||0))}</td></tr>`).join('');openModal(`<div class="actions" style="justify-content:space-between;margin-bottom:15px"><button class="btn" onclick="openCreditInvoices('${s.clientId}')">← Facturas</button><div class="actions"><button class="btn primary" onclick="printCreditInvoice('${s.id}')">🖨 Imprimir / PDF</button><button class="btn" onclick="closeModal()">Cerrar</button></div></div><div id="creditInvoicePrint" class="card print-area" style="box-shadow:none;border:1px solid var(--border);max-width:720px;margin:auto"><div style="text-align:center"><h2 style="margin:0">${db.settings.business}</h2><p class="muted" style="margin:4px 0">${db.settings.nit||''} · ${db.settings.city||''}</p><h3 style="margin:14px 0 4px">FACTURA DE VENTA</h3><b>${s.number}</b></div><hr><div class="grid cols2" style="gap:8px"><div><b>Cliente</b><br>${c.name||'—'}<br><span class="muted">${c.doc||'Sin documento'}</span></div><div><b>Fecha</b><br>${s.date||'—'} ${s.time||''}<br><b>Medio de pago:</b> ${s.method||'Crédito'}</div></div><div class="tablewrap" style="margin-top:16px"><table class="table"><thead><tr><th>Producto</th><th style="text-align:center">Cant.</th><th style="text-align:right">Valor unit.</th><th style="text-align:right">Total</th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="empty">Sin productos registrados</td></tr>'}</tbody></table></div><div style="max-width:320px;margin:16px 0 0 auto"><div class="totalline"><span>Subtotal</span><b>${money(subtotal)}</b></div><div class="totalline"><span>Descuento</span><b>${money(s.discount||0)}</b></div><div class="totalline grand"><span>Total</span><b>${money(s.total||0)}</b></div><div class="totalline"><span>Estado</span><b>${s.status||'Crédito'}</b></div></div></div>`)}
 function printCreditInvoice(id){let s=(db.sales||[]).find(x=>x.id===id);if(!s)return toast('Factura no encontrada');printTicket(id)}
-function openPaymentModal(id=''){openModal(`<h2>Registrar abono</h2><div class="form"><div class="field"><label>Cliente</label><select id="pay_client">${db.clients.filter(c=>c.balance>0).map(c=>`<option value="${c.id}" ${c.id===id?'selected':''}>${c.name} · ${money(c.balance)}</option>`).join('')}</select></div><div class="field"><label>Valor</label><input id="pay_value" type="number" min="1"></div><div class="field"><label>Método</label><select id="pay_method"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div></div><button class="btn primary" style="margin-top:15px" onclick="savePayment()">Registrar abono</button>`)}
-function savePayment(){let c=db.clients.find(x=>x.id===v('pay_client')),n=Math.min(+v('pay_value'),c.balance);c.balance-=n;db.cash.balance+=n;db.payments.unshift({id:uid('pa'),date:today(),clientId:c.id,value:n,method:v('pay_method')});log('Abono de cartera',c.name);save();closeModal();renderReceivables();toast('Abono registrado')}
+function openPaymentModal(id=''){
+  const selectedClient=id||db.clients.find(c=>c.balance>0)?.id||'';
+  const clientInvoices=()=>{const clientId=v('pay_client')||selectedClient;return (db.sales||[]).filter(s=>s.clientId===clientId&&s.method==='Crédito').sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||'')))};
+  const invoiceOptions=clientInvoices().map(s=>`<option value="${String(s.number||s.invoiceNumber||s.factura||s.id).replace(/"/g,'&quot;')}">${s.number||s.invoiceNumber||s.factura||s.id} · ${money(s.total||0)} · ${s.date||''}</option>`).join('');
+  openModal(`<h2>Registrar abono</h2>
+  <div class="form">
+    <div class="field"><label>Cliente</label><select id="pay_client" onchange="refreshPaymentInvoiceOptions()">${db.clients.filter(c=>c.balance>0).map(c=>`<option value="${c.id}" ${c.id===selectedClient?'selected':''}>${c.name} · ${money(c.balance)}</option>`).join('')}</select></div>
+    <div class="field"><label>Factura a la que corresponde el abono</label><select id="pay_invoice"><option value="">-- Selecciona la factura --</option>${invoiceOptions}</select></div>
+    <div class="field"><label>Valor</label><input id="pay_value" type="number" min="1"></div>
+    <div class="field"><label>Método</label><select id="pay_method"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div>
+  </div>
+  <p class="muted" style="margin-top:10px">El abono quedará relacionado con esta factura y aparecerá en la columna ABONO de sus Facturas a crédito.</p>
+  <button class="btn primary" style="margin-top:15px" onclick="savePayment()">Registrar abono</button>`)
+}
+function refreshPaymentInvoiceOptions(){
+  const clientId=v('pay_client'),el=document.getElementById('pay_invoice');
+  if(!el)return;
+  const invoices=(db.sales||[]).filter(s=>s.clientId===clientId&&s.method==='Crédito').sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||'')));
+  el.innerHTML='<option value="">-- Selecciona la factura --</option>'+invoices.map(s=>{const ref=s.number||s.invoiceNumber||s.factura||s.id;return `<option value="${String(ref).replace(/"/g,'&quot;')}">${ref} · ${money(s.total||0)} · ${s.date||''}</option>`}).join('');
+}
+function savePayment(){
+  const c=db.clients.find(x=>x.id===v('pay_client'));
+  const invoiceRef=v('pay_invoice').trim();
+  const amount=Number(v('pay_value'));
+  if(!c)return toast('Selecciona un cliente');
+  if(!invoiceRef)return toast('Selecciona la factura a la que corresponde el abono');
+  if(!amount||amount<=0)return toast('Escribe un valor de abono válido');
+  const n=Math.min(amount,Number(c.balance)||0);
+  if(n<=0)return toast('El cliente no tiene saldo pendiente');
+  c.balance-=n;
+  db.cash.balance+=n;
+  db.payments.unshift({id:uid('pa'),date:today(),time:new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}),clientId:c.id,value:n,method:v('pay_method'),refFactura:invoiceRef});
+  log('Abono de cartera',c.name+' · '+invoiceRef);
+  save();
+  closeModal();
+  renderReceivables();
+  toast('Abono registrado y relacionado con la factura');
+}
 function renderQuotes(){document.getElementById('quotes').innerHTML=pageHead('Cotizaciones','Crea cotizaciones completas, compártelas y conviértelas en venta',`<button class="btn primary" onclick="openQuoteModal()">+ Cotización</button>`)+`<div class="card">${table(['Número','Fecha','Cliente','Total','Vigencia','Estado','Acción'],db.quotes.map(q=>`<tr><td><b>${q.number}</b></td><td>${q.date}</td><td>${clientName(q.clientId)}</td><td><b>${money(q.total)}</b></td><td>${q.validity||'—'}</td><td><span class="badge">${q.status}</span></td><td><button class="btn sm" onclick="viewQuote('${q.id}')">Ver</button> <button class="btn sm" onclick="printQuotePDF('${q.id}')">PDF</button> <button class="btn sm" onclick="quoteWhatsApp('${q.id}')">WhatsApp</button> <button class="btn sm" onclick="convertQuote('${q.id}')">Venta</button> <button class="btn sm danger" onclick="deleteQuote('${q.id}')">Eliminar</button></td></tr>`).join(''),'Aún no hay cotizaciones. Crea la primera para varios productos.')}</div>`}
 let quoteDraftItems=[];
 function openQuoteModal(){quoteDraftItems=[];openModal(`<h2>Nueva cotización</h2><p class="muted">Agrega todos los productos que el cliente solicitó. La cotización quedará guardada en la nube y podrás verla, imprimirla en PDF o compartirla por WhatsApp.</p><div class="form"><div class="field"><label>Cliente</label><select id="q_client">${db.clients.map(c=>`<option value="${c.id}">${c.name}${c.phone?' · '+c.phone:''}</option>`).join('')}</select></div><div class="field"><label>Vigencia hasta</label><input id="q_valid" type="date" value="${today()}"></div><div class="field" style="grid-column:1/-1"><label>Observaciones para el cliente</label><textarea id="q_notes" rows="2" placeholder="Ej.: Precios sujetos a disponibilidad. Tiempo de entrega 1 a 2 días."></textarea></div></div><div class="card" style="margin-top:15px;background:#f8fafc"><div class="form"><div class="field"><label>Producto</label><select id="q_prod">${db.products.filter(p=>p.active!==false).map(p=>`<option value="${p.id}">${p.name} · ${money(p.price)}</option>`).join('')}</select></div><div class="field"><label>Cantidad</label><input id="q_qty" type="number" min="0.01" step="0.01" value="1"></div><div class="field" style="align-self:end"><button class="btn primary" onclick="addQuoteItem()">+ Agregar producto</button></div></div><div id="quoteDraftItems" style="margin-top:12px"></div></div><div style="display:flex;justify-content:flex-end;gap:10px;align-items:center;margin-top:15px"><b>Total: <span id="quoteDraftTotal">${money(0)}</span></b><button class="btn primary" onclick="saveQuote()">Guardar cotización</button></div>`);renderQuoteDraftItems()}
