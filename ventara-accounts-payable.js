@@ -118,9 +118,9 @@
     const head=root.querySelector('.head');
     const actions=head?.querySelector('.actions') || head;
     if(!actions)return;
-    // Este botón pertenece SOLO a la cabecera de Proveedores.
-    // Nunca debe aparecer dentro de Cuentas por pagar.
-    if(window[TAB_KEY]==='payables'){
+    // El botón de navegación pertenece exclusivamente a Proveedores.
+    // En Cuentas por pagar no debe existir ni ser reinyectado.
+    if(window[TAB_KEY]==='payables' || root.querySelector('[data-vap-card]')){
       actions.querySelectorAll('#btn-ir-cuentas-por-pagar, [data-vap-open]').forEach(el=>el.remove());
       return;
     }
