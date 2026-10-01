@@ -232,7 +232,15 @@
     root.querySelectorAll('[data-vap-status]').forEach(s=>s.addEventListener('change',()=>changeStatus(s.getAttribute('data-vap-status'),s.value)));
   }
 
-  // Limpieza específica: solo elimina botones llamados "Eliminar" que no sean el rojo funcional.\n  function removeGrayDeleteButtons(){\n    document.querySelectorAll('.actions button').forEach(btn=>{\n      const text=String(btn.textContent||'').trim().toLowerCase();\n      if(text==='eliminar' && !btn.classList.contains('btn-danger')) btn.remove();\n    });\n  }\n\n  function applyFilters(){
+  // Limpieza específica: solo elimina botones llamados "Eliminar" que no sean el rojo funcional.
+  function removeGrayDeleteButtons(){
+    document.querySelectorAll('.actions button').forEach(btn=>{
+      const text=String(btn.textContent||'').trim().toLowerCase();
+      if(text==='eliminar' && !btn.classList.contains('btn-danger')) btn.remove();
+    });
+  }
+
+  function applyFilters(){
     const root=document.getElementById(ROOT_ID);if(!root)return;
     const qRaw=String(root.querySelector('[data-vap-search]')?.value||'').trim().toLowerCase();
     const q=normalizeReference(qRaw);
