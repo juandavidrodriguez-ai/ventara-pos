@@ -118,6 +118,12 @@
     const head=root.querySelector('.head');
     const actions=head?.querySelector('.actions') || head;
     if(!actions)return;
+    // Este botón pertenece SOLO a la cabecera de Proveedores.
+    // Nunca debe aparecer dentro de Cuentas por pagar.
+    if(window[TAB_KEY]==='payables'){
+      actions.querySelectorAll('#btn-ir-cuentas-por-pagar, [data-vap-open]').forEach(el=>el.remove());
+      return;
+    }
     if(actions.querySelector('#btn-ir-cuentas-por-pagar'))return;
     const b=document.createElement('button');
     b.type='button';
