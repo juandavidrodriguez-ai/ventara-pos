@@ -118,24 +118,13 @@
     const head=root.querySelector('.head');
     const actions=head?.querySelector('.actions') || head;
     if(!actions)return;
-    if(actions.querySelector('[data-vap-open]'))return;
+    if(actions.querySelector('#btn-ir-cuentas-por-pagar'))return;
     const b=document.createElement('button');
     b.type='button';
-    b.className='btn primary';
-    b.setAttribute('data-vap-open','1');
+    b.className='btn btn-outline-primary';
+    b.id='btn-ir-cuentas-por-pagar';
+    b.setAttribute('onclick','renderPayables()');
     b.textContent='Cuentas por pagar';
-    b.addEventListener('click',(ev)=>{
-      ev.preventDefault();
-      ev.stopPropagation();
-      window[TAB_KEY]='payables';
-      try{
-        if(window.ventaraAccountsPayable?.render) window.ventaraAccountsPayable.render();
-        else renderPayables();
-      }catch(e){
-        console.error('[VENTARA] Error al abrir Cuentas por pagar',e);
-        notify('No se pudo abrir Cuentas por pagar. Revisa la consola.');
-      }
-    });
     actions.appendChild(b);
   }
 
@@ -553,6 +542,8 @@
 
   // El botón [data-vap-open] ya tiene su propio listener.
   // No instalar otro listener global para evitar doble ejecución al abrir el módulo.
+  window.renderPayables=renderPayables;
+  window.__ventaraBackToSuppliers=()=>{window[TAB_KEY]='suppliers';if(typeof window.renderSuppliers==='function')window.renderSuppliers();else{const root=document.getElementById(ROOT_ID);if(root)renderSupplierPayablesButton(root)}};
   window.openVentaraPayables=()=>{window[TAB_KEY]='payables';renderPayables()};
   window.ventaraAccountsPayable={render:renderPayables,openNew:openPayableModal,registerPayment:openPaymentModal,find};
 })();
