@@ -116,7 +116,7 @@
   function renderSupplierPayablesButton(root){
     if(!root)return;
     const head=root.querySelector('.head');
-    const actions=head?.querySelector('.actions');
+    const actions=head?.querySelector('.actions') || head;
     if(!actions)return;
     if(actions.querySelector('[data-vap-open]'))return;
     const b=document.createElement('button');
