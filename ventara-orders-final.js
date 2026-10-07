@@ -133,18 +133,7 @@ document.addEventListener('click',function(e){
   if(info.client)ventaraMostrarConsulta(info.client);else alert('No se encontró el cliente en los datos actuales.');
 },true);
 
-/* Delegación única y directa del botón ABONAR. No depende de data-id. */
-document.addEventListener('click',function(e){
-  const btn=e.target.closest?.('button, a, input');
-  if(!btn)return;
-  const txt=(btn.textContent||btn.value||'').trim().toLowerCase();
-  if(txt!=='abonar'&&!btn.classList.contains('btn-abonar'))return;
-  e.preventDefault();e.stopPropagation();
-  const fila=btn.closest('tr');
-  const info=ventaraAbonoClientByRow(fila);
-  /* El botón identifica la fila; el módulo existente conserva historial, saldo y comprobante. */
-  ventaraMostrarAbonoForm(fila,info);
-},true);
+/* El botón ABONAR usa ahora el flujo nativo openPaymentModal() de index.html. No se intercepta para evitar duplicar la lógica de cartera. */
 
 function ventaraAbonoWatch(){ventaraAgregarConsultar();const receivables=document.getElementById('receivables');if(receivables&&!window.__ventaraAbonoObserver){window.__ventaraAbonoObserver=true;new MutationObserver(()=>ventaraAgregarConsultar()).observe(receivables,{childList:true,subtree:true})}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ventaraAbonoWatch,{once:true});else ventaraAbonoWatch();
