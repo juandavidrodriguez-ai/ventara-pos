@@ -276,7 +276,7 @@ function clearCreditInvoiceFilters(clientId){
 
 function getCreditConsolidatedData(clientId,mode='owed'){
  const client=db.clients.find(x=>String(x.id)===String(clientId));if(!client)return null;
- const allSales=(db.sales||[]).filter(s=>String(s.clientId)===String(clientId)&&s.method==='Crédito');
+ const allSales=(db.sales||[]).filter(s=>String(s.clientId)===String(clientId)&&String(s.method||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()==='credito');
  const hasAccountBalance=client.balance!==undefined&&client.balance!==null&&Number.isFinite(Number(client.balance));
  const accountSettled=hasAccountBalance&&Number(client.balance)<=0.005;
  let sales;
