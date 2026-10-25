@@ -282,7 +282,7 @@ function getCreditConsolidatedData(clientId,mode='owed'){
  let sales;
  if(mode==='paid')sales=allSales.filter(s=>creditInvoiceStatus(s)==='Pagada');
  else if(mode==='total')sales=allSales;
- else sales=accountSettled?[]:allSales.filter(s=>creditInvoiceStatus(s)!=='Pagada');
+ else sales=allSales.filter(s=>creditInvoiceBalance(s)>0.005);
  const itemsMap=new Map();let totalPurchases=0,paid=0,balance=0;
  sales.forEach(s=>{
   const total=Math.max(0,Number(s.total)||0),abono=Math.min(total,creditInvoicePaid(s)),saldo=Math.max(0,total-abono);
