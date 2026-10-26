@@ -264,7 +264,7 @@ function filterCreditInvoices(clientId){
  const c=db.clients.find(x=>String(x.id)===String(clientId)),from=v('creditInvoiceFrom'),to=v('creditInvoiceTo'),status=v('creditInvoiceStatus')||'active';
  if(!c)return;
  const el=document.getElementById('creditInvoiceList');if(from&&to&&from>to){if(el)el.innerHTML='<div class="empty">La fecha “Desde” no puede ser posterior a “Hasta”.</div>';return}
- const sales=(db.sales||[]).filter(s=>String(s.clientId)===String(clientId)&&s.method==='Crédito'&&(!from||String(s.date||'')>=from)&&(!to||String(s.date||'')<=to)).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||'')));
+ const sales=getCreditClientSales(clientId).filter(s=>(!from||String(s.date||'')>=from)&&(!to||String(s.date||'')<=to)).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.time||'').localeCompare(String(a.time||'')));
  if(el)el.innerHTML=creditInvoiceListHtml(sales,status);
 }
 function clearCreditInvoiceFilters(clientId){
@@ -275,7 +275,7 @@ function clearCreditInvoiceFilters(clientId){
 
 
 function getCreditClientSales(clientId){
- return (db.sales||[]).filter(s=>String(s.clientId)===String(clientId)&&s.method==='Crédito');
+ return (db.sales||[]).filter(s=>String(s.clientId)===String(clientId)&&String(s.method||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()==='credito');
 }
 function creditClientInvoiceDebt(clientId){return getCreditClientSales(clientId).reduce((sum,s)=>sum+creditInvoiceBalance(s),0)}
 function getCreditConsolidatedData(clientId,mode='owed'){
