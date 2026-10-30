@@ -315,3 +315,7 @@
 
 /* VENTARA: carga aislada del formulario Precio + IVA + Total. */
 (()=>{if(document.querySelector('script[data-ventara-price-iva-layout-fix]'))return;const s=document.createElement('script');s.src='ventara-price-iva-layout-fix.js?v=20260920-3';s.async=false;s.dataset.ventaraPriceIvaLayoutFix='1';document.head.appendChild(s);})();
+
+
+/* VENTARA: carga aislada del documento del cliente en tickets de crédito. */
+(()=>{if(document.querySelector('script[data-ventara-ticket-client-doc]'))return;const s=document.createElement('script');s.src='ventara-ticket-client-doc.js?v=20261029-1';s.async=false;s.dataset.ventaraTicketClientDoc='1';document.head.appendChild(s);})();
