@@ -89,6 +89,41 @@ window.ventaraOrders={render,openNew:()=>openModal(),setStatus};window.renderOrd
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installOrdersFilterGuard();watch()},{once:true});else{installOrdersFilterGuard();watch();}
 
 /* Cobro a crédito: validación DOM aislada y delegación al flujo nativo de venta. */
+/* Normaliza el ID del cliente elegido en el selector de crédito.
+   El <select> siempre entrega strings; los datos antiguos pueden tener IDs numéricos.
+   Se conserva el finishSale nativo y toda su lógica de crédito/persistencia. */
+function installCreditClientIdNormalization(){
+  if(window.__ventaraCreditClientIdNormalization)return;
+  const nativeFinishSale=window.finishSale;
+  if(typeof nativeFinishSale!=='function'){
+    console.warn('[VENTARA] finishSale nativo aún no está disponible; no se instaló la normalización.');
+    return;
+  }
+  window.finishSale=function(methodOverride,totalOverride){
+    if(methodOverride==='Crédito'){
+      try{
+        const select=document.getElementById('creditClientSelect');
+        const selectedId=select ? String(select.value||'').trim() : '';
+        const clients=typeof db!=='undefined' && Array.isArray(db?.clients) ? db.clients : [];
+        const selectedClient=clients.find(c=>c && c.id!=null && String(c.id).trim()===selectedId);
+        if(!selectedId || !selectedClient){
+          if(typeof toast==='function')toast('No se pudo identificar al cliente seleccionado. Vuelve a seleccionarlo.');
+          return null;
+        }
+        /* Restaurar el tipo original del ID para que la búsqueda estricta nativa coincida. */
+        posClient=selectedClient.id;
+      }catch(error){
+        console.error('[VENTARA] No se pudo normalizar el cliente de crédito:',error);
+        if(typeof toast==='function')toast('No se pudo validar el cliente seleccionado.');
+        return null;
+      }
+    }
+    return nativeFinishSale.apply(this,arguments);
+  };
+  window.__ventaraCreditClientIdNormalization=true;
+}
+installCreditClientIdNormalization();
+
 function installCreditPaymentGuard(){
   if(window.__ventaraCreditPaymentGuard)return;
   window.__ventaraCreditPaymentGuard=true;
